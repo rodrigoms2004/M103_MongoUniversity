@@ -1,0 +1,808 @@
+vagrant up
+
+vagrant status
+
+mongod --version
+
+vagrant ssh
+
+vagrant halt
+
+
+pid=6481 port=27017
+
+
+
+MongoDB Enterprise > show dbs
+admin   0.000GB
+config  0.000GB
+local   0.000GB
+MongoDB Enterprise > use admin
+switched to db admin
+MongoDB Enterprise > db.shutdownServer()
+server should be down...
+
+# RUNNING IN BACKGROUND
+vagrant@m103:~$ mkdir first_mongod
+vagrant@m103:~$ mongod --port 30000 --dbpath first_mongod --logpath first_mongod/mongod.log --fork
+
+
+vagrant@m103:~$ mongo --port 30000
+
+#####################################################
+MONGO DB ARCHITECTURE
+
+Mongo DB Query Language - MQL
+Mongo DB Document Data Model	White/Read concers
+Storage Layer: system calls, disk flush, files structures, compression
+Engines: WiredTiger, Encrypted, In-Memory, MMapV1
+Default: WiredTiger!
+Security and Admin layers
+
+Replica sets are groups of mongods that contain the same data
+
+Raft Protocol, failover protocol, elect a new primary node
+
+Shard
+Config 
+
+Sharded clusters are composed of Mongos, Config Servers and Replica Sets
+
+#####################################################
+DATABASES
+
+Tables = collections
+
+#####################################################
+
+Mongo DB Documents are restricted to 16MB in size
+
+
+#####################################################
+MongoDB Configuration File
+
+Command Line Option		Configuration File Options
+--dbpath				storage.dbPath
+--logpath				systemLog.path and systemLog.destination
+--bind-ip				net.bind_ip
+--replSet				replication.replSetName
+--keyFile				security.keyFile
+--sslPEMKey				net.ssl.sslPEMKey
+--sslCAKey				net.ssl.sslCAKey
+--sslMode				netsslMode
+--fork					processManagement.fork
+
+https://docs.mongodb.com/manual/reference/program/mongod/#options
+https://docs.mongodb.com/manual/reference/configuration-options/
+
+mongod --dbpath /data/db --logpath /data/log/mongod.log --fork --replSet "M103" --keyFile /data/keyfile --bind_ip "127.0.0.1,192.168.0.100" --sslMode requireSSL --sslCAFile "/etc/ssl/SSLCA.pem" --sslPEMKeyFile "/etc/ssl/ssl.pem"
+
+
+YAML file
+Yet Another Markup Language
+
+storage:
+  dbPath: "/data/db"
+systemLog:
+  path: "/data/log.mongod.log"
+  destination: "file"
+replication:
+  replSetName: M103
+net:
+  bindIp : "127.0.0.1,192.168.0.100"
+ssl:
+  mode: "requireSSL"
+  PEMKeyFile: "/etc/ssl/ssl.pem"
+  CAFile: "/etc/ssl/SSLCA.pem"
+security:
+  keyFile: "/data/keyfile"
+processManagement:
+  fork : true
+
+mongod --config "/etc/mongod.conf"
+mongod -f "/etc/mongod.conf"
+
+
+#####################################################
+LAB - Launching Mongod
+
+run on port 27000
+data files are stored in /data/db/
+listens to connections from the IP address 192.168.103.100 and localhost
+authentication is enabled
+
+
+mongod --port 27000 --dbpath /data/db --auth --bind_ip 192.168.103.100,127.0.0.1
+
+mongo --port 27000
+
+use admin
+db.createUser({
+  user: "m103-admin",
+  pwd: "m103-pass",
+  roles: [
+    {role: "root", db: "admin"}
+  ]
+})
+
+
+mongo --port 27000 -u m103-admin
+
+#####################################################
+LAB - Configuration File
+
+storage:
+  dbPath: "/data/db"
+net:
+  bindIp : "127.0.0.1,192.168.103.100"
+  port: 27000
+security:
+  authorization: "enabled"
+
+
+mongod --config "mongo_lab.conf"
+
+
+mongo --port 27000 -u m103-admin
+
+
+#####################################################
+MongoDB File Structure (WiredTiger)
+
+DO NOT CHANGE!
+
+FTDC Data Sources
+ls -l /data/db/diagnostic.data
+
+#####################################################
+LAB - CHANGE THE DEFAULT DB PATH
+
+mongo_lab_path.conf 
+
+storage:
+  dbPath: "/var/mongodb/db"
+net:
+  bindIp : "127.0.0.1,192.168.103.100"
+  port: 27000
+security:
+  authorization: "enabled"
+
+mongod --config "mongo_lab_path.conf" 
+
+#####################################################
+Basic Helper Groups
+
+db.<method>()	database
+	db.<collection>.<method>()
+rs.<method>()	replica set
+sh.<method>()	sharding 
+
+User Management
+	db.createUser()
+	db.dropUser()
+
+Collection Management
+	db.renameCollection()
+	db.collection.createIndex()
+	db.collection.drop()
+
+Database Management
+	db.dropDatabase()
+	db.createCollection()
+
+Database Status
+	db.serverStatus()
+
+Database Commands
+	# set the database before use runCommand
+	db.runCommand( { <COMMAND> } )
+
+	db.commandHelp( "<command>" )
+
+Introspect a Shell Helper
+
+db.products.createIndex
+function (keys, options) {
+	return this.createIndexes([keys], options);
+}
+
+#####################################################
+Logging
+
+ACCESS:		messages related to access control, such as authentication
+COMMAND:	messages related to database commands
+CONTROL:	messages related to control activities, such as initialization
+FTDC:		messages related to the diagnostic data collection mechanism
+GEO:		messages related to the parsing of geospatial shapes
+INDEX:		messages related to indexing operations
+NETWORK:	messages related to network activities, such as accepting connections
+QUERY:		messages related to queries, including query planner activities
+REPL:		messages related to replica sets, such as initial sync or heartbeats
+REPL_HB:	messages related to replica set heartbeats
+ROLLBACK:	messages related to rollback operations
+SHARDING:	messages related to sharding operations
+STORAGE:	messages related to storage activities
+JOURNAL:	messages related to journaling activities
+WRITE:		messages related to write operations, such as update commands
+
+
+db.getLogComponents()
+
+get log companents of current db
+
+Log Verbosity Levels
+-1	:	Inherit from parent
+0	:	Default Verbosity, to include informal messages
+1-5	: 	increases the verbosity level to include Debug messages
+
+MongoDB Enterprise > db.getLogComponents()
+{
+	"verbosity" : 0,
+	"accessControl" : {
+		"verbosity" : -1
+	},
+	"command" : {
+		"verbosity" : -1
+	},
+	"control" : {
+		"verbosity" : -1
+	},
+	"executor" : {
+		"verbosity" : -1
+	},
+	"geo" : {
+		"verbosity" : -1
+	},
+	"index" : {
+		"verbosity" : -1
+	},
+	"network" : {
+		"verbosity" : -1,
+		"asio" : {
+			"verbosity" : -1
+		},
+		"bridge" : {
+			"verbosity" : -1
+		}
+	},
+	"query" : {
+		"verbosity" : -1
+	},
+	"replication" : {
+		"verbosity" : -1,
+		"heartbeats" : {
+			"verbosity" : -1
+		},
+		"rollback" : {
+			"verbosity" : -1
+		}
+	},
+	"sharding" : {
+		"verbosity" : -1,
+		"shardingCatalogRefresh" : {
+			"verbosity" : -1
+		}
+	},
+	"storage" : {
+		"verbosity" : -1,
+		"journal" : {
+			"verbosity" : -1
+		}
+	},
+	"write" : {
+		"verbosity" : -1
+	},
+	"ftdc" : {
+		"verbosity" : -1
+	},
+	"tracking" : {
+		"verbosity" : -1
+	}
+}
+
+
+MongoDB Enterprise > db.adminCommand({"getLog": "global"})
+
+
+db.setLogLevel(0, "index")
+
+"index" : {
+			"verbosity" : 0
+		},
+
+
+Log Message Severity Levels
+
+F - Fatal 
+E - Error
+W - Warning
+I - Informational (Verbosity Level 0)
+D - Debug (Verbosity Level 1-5)
+
+#####################################################
+Profiling the Database
+
+Events captured bhy the profiler:
+	CRUD
+	Administrative operations
+	Configuration operations
+
+Level	Description
+0		off
+1		only operations tha take longer than the value of slowms
+2		collects data for all operations
+
+
+MongoDB Enterprise > use newDB
+switched to db newDB
+MongoDB Enterprise > db.getProfilingLevel()
+0
+MongoDB Enterprise > db.setProfilingLevel(1)
+{ "was" : 0, "slowms" : 100, "sampleRate" : 1, "ok" : 1 }
+
+# mongodb creates a new collection
+MongoDB Enterprise > show collections
+system.profile
+
+# make everything profile in the database, slowms = 0
+MongoDB Enterprise > db.setProfilingLevel(1, { slowms: 0 } )
+{ "was" : 1, "slowms" : 100, "sampleRate" : 1, "ok" : 1 }
+MongoDB Enterprise > db.new_collection.insert({ "a": 1 } )
+WriteResult({ "nInserted" : 1 })
+
+MongoDB Enterprise > db.system.profile.find().pretty()
+{
+	"op" : "insert",
+	"ns" : "newDB.new_collection",
+	"command" : {
+		"insert" : "new_collection",
+		"ordered" : true,
+		"lsid" : {
+			"id" : UUID("13ae0590-1514-4384-aabe-04ad929b4094")
+		},
+		"$db" : "newDB"
+	},
+	"ninserted" : 1,
+	"keysInserted" : 1,
+	"numYield" : 0,
+	"locks" : {
+		"Global" : {
+			"acquireCount" : {
+				"r" : NumberLong(3),
+				"w" : NumberLong(3)
+			}
+		},
+		"Database" : {
+			"acquireCount" : {
+				"w" : NumberLong(2),
+				"W" : NumberLong(1)
+			}
+		},
+		"Collection" : {
+			"acquireCount" : {
+				"w" : NumberLong(2)
+			}
+		}
+	},
+	"responseLength" : 29,
+	"protocol" : "op_msg",
+	"millis" : 17,
+	"ts" : ISODate("2019-04-15T21:15:58.783Z"),
+	"client" : "127.0.0.1",
+	"appName" : "MongoDB Shell",
+	"allUsers" : [ ],
+	"user" : ""
+}
+
+
+MongoDB Enterprise > db.new_collection.find({ "a": 1 } )
+{ "_id" : ObjectId("5cb4f48e765d3c6cd1351c82"), "a" : 1 }
+
+
+MongoDB Enterprise > db.system.profile.find().pretty()
+...
+	"docsExamined" : 1,
+	"cursorExhausted" : true,
+	"numYield" : 0,
+	"locks" : {
+		"Global" : {
+			"acquireCount" : {
+				"r" : NumberLong(2)
+			}
+		},
+		"Database" : {
+			"acquireCount" : {
+				"r" : NumberLong(1)
+			}
+		},
+		"Collection" : {
+			"acquireCount" : {
+				"r" : NumberLong(1)
+			}
+		}
+	},
+	"nreturned" : 1,
+	"responseLength" : 129,
+	"protocol" : "op_msg",
+	"millis" : 0,
+	"planSummary" : "COLLSCAN",
+	"execStats" : {
+		"stage" : "COLLSCAN",
+		"filter" : {
+			"a" : {
+				"$eq" : 1
+			}
+		},
+...
+
+#####################################################
+Lab - Logging to a Different Facility
+
+
+storage:
+  dbPath: "/var/mongodb/db"
+systemLog:
+  path: "/var/mongodb/db/mongod.log"
+  destination: "file"
+  logAppend: true
+operationProfiling:
+  mode: slowOp
+  slowOpThresholdMs: 50
+net:
+  bindIp : "127.0.0.1,192.168.103.100"
+  port: 27000
+processManagement:
+  fork : true
+
+
+vagrant@m103:~$ mongod --config "mongo_lab_different_logpath.conf"
+
+mongod --config "/etc/mongod.conf"
+mongod -f "/etc/mongod.conf"
+
+
+
+#####################################################
+Basic Security: Part 1
+
+Authentication
+Verifies the Identity of a user
+Answers the question: Who are you?
+
+Authorization
+Verifies the privileges of a user
+Answers the question: What do you have access to?
+
+
+Authentication Mechanisms
+	SCRAM, challenge response
+	X.509, certification
+
+MongoDB Enterprise Only
+	LDAP
+	KERBEROS
+
+Cluster Authentication Mechanisms
+	secret handshake
+
+
+Authorization: Role Based Access Control
+	Each user has one or more Roles
+	Each Role has one or more Privileges
+	A Privilege represents a group of Actions and the Resources those actions apply to
+
+Database Administrator
+	Create User
+	Create Index
+Developer
+	Write Data
+	Read Data
+Data Scientist
+	Read Data
+
+
+
+#####################################################
+Basic Security: Part 2
+
+cat /etc/mongodb.conf
+security:
+  authorization: "enabled"
+
+Localhost Exception
+	Allows you to access a MongoDB server that enforcer authentication but does not yet have a configured user for you to authenticate with
+	Must run Mongo shell from the same host running the MongoDB server 
+	The localhost exception closes after you create your first user
+	Always create a user with administrative privileges first
+
+Lecture Instructions
+
+Print configuration file:
+
+cat /etc/mongod.conf
+Launch standalone mongod:
+
+mongod -f /etc/mongod.conf
+Connect to mongod:
+
+mongo --host 127.0.0.1:27017
+Create new user with the root role (also, named root):
+
+use admin
+db.createUser({
+  user: "root",
+  pwd: "root123",
+  roles : [ "root" ]
+})
+Connect to mongod and authenticate as root:
+
+mongo --username root --password root123 --authenticationDatabase admin
+Run DB stats:
+
+db.stats()
+Shutdown the server:
+
+use admin
+db.shutdownServer()
+
+USERS ARE STORED IN EACH DATABASES, example: Bob from Customers and Bob from Inventory
+
+#####################################################
+Built-In Roles: Part 1
+
+	Role Bases Access Control
+	Database Users are granted roles
+	Custom Roles
+		Tailored roles to attend specific needs of sets of users
+	Built-in Roles
+		Pre-packaged MongoDB Roles
+	Role Structure
+		Privileges
+		Action + Resource
+
+
+ROLE STRUCTURE
+	Role is compsed of
+		- Set of Privileges
+			- Actions -> Resources
+OBS: could inherit Role
+
+
+RESOURCES: Database, Collection, Set of Collections, CLuster (Replica Set, Shard Cluster)
+
+// specific database and collection
+{ db: "products", collection: "inventory" }
+
+// all databases and all collections
+{ db: "", "collections: "" }
+
+// any database and specific collection
+{ db: "", "collections: "accounts" }
+
+// specific database any collection
+{ db: "products", "collections: "" }
+
+// or cluster resource
+{ cluster: true }
+
+
+PRIVILEGE
+	Resource
+	Actions allowed over a resource
+
+// Allow to shutdown over the cluster
+{ resource: { cluster: true }, actions: [ "shutdown" ] }
+
+
+ROLE STRUCTURE
+	Role is compsed of
+		- Set of Privileges
+			- Actions -> Resources
+		- Network Authentication Restrictions
+			- clientSource
+			- serverAddress
+
+BUILT-IN Roles
+
+Database User				read, readWrite | readAnyDatabase, readWriteAnyDatabase
+Database Administration		dbAdmin, userAdmin, dbOwner | dbAdminAnyDatabase, userAdminAnyDatabase
+Cluster Administration		clusterAdmin, clusterManager, clusterMonitor, hostManager
+Backup/Restore				backup, restore
+Super User					root | root (All Database)
+
+
+Couruse focus: userAdmin, dbOwner and dbAdmin
+
+
+
+#####################################################
+Built-In Roles: Part 2
+
+
+Lecture Instructions
+
+Authenticate as root user:
+
+mongo admin -u root -p root123
+
+Create security officer:
+
+db.createUser(
+  { user: "security_officer",
+    pwd: "h3ll0th3r3",
+    roles: [ { db: "admin", role: "userAdmin" } ]
+  }
+)
+
+Create database administrator:
+
+use admin
+db.createUser(
+  { user: "dba",
+    pwd: "c1lynd3rs",
+    roles: [ { db: "admin", role: "dbAdmin" } ]
+  }
+)
+
+Grant role to user:
+
+db.grantRolesToUser( "dba",  [ { db: "playground", role: "dbOwner"  } ] )
+Show role privileges:
+
+db.runCommand( { rolesInfo: { role: "dbOwner", db: "playground" }, showPrivileges: true} )
+
+
+
+userAdmin
+
+changeCustomData, changePassword, createRole, createUser, dropRole, dropUser,
+grantRole, revokeRole, setAuthenticationRestriction, viewRole, viewUser
+
+dbAdmin
+
+collStats, dbHash, dbStats, killCursors, listIndexex...
+
+dbOwner
+	readWrite, dbAdmin and userAdmin roles
+
+
+#####################################################
+
+Lab - Creating First Application User
+
+
+
+mongod --port 27000 --dbpath /var/mongodb/db
+
+use admin
+db.createUser({
+  user: "m103-admin",
+  pwd: "m103-pass",
+  roles: [
+    {role: "root", db: "admin"}
+  ]
+})
+
+
+storage:
+  dbPath: "/var/mongodb/db"
+net:
+  bindIp : "127.0.0.1,192.168.103.100"
+  port: 27000
+security:
+  authorization: "enabled"
+
+
+storage:
+  dbPath: "/var/mongodb/db"
+net:
+  bindIp : "127.0.0.1,192.168.103.100"
+  port: 27000
+security:
+  authorization: "enabled"
+
+
+mongod --config "mongodb_appUser.conf"
+
+
+mongo --username m103-admin --password m103-pass --authenticationDatabase admin --port 27000
+
+
+Role: readWrite on applicationData database
+Authentication source: admin
+Username: m103-application-user
+Password: m103-application-pass
+
+use admin
+db.createUser(
+  { user: "m103-application-user",
+    pwd: "m103-application-pass",
+    roles: [ { db: "applicationData", role: "readWrite" } ]
+  }
+)
+
+Successfully added user: {
+	"user" : "m103-application-user",
+	"roles" : [
+		{
+			"db" : "applicationData",
+			"role" : "readWrite"
+		}
+	]
+}
+
+mongo --username m103-application-user --password m103-application-pass --authenticationDatabase admin --port 27000
+
+#####################################################
+Server Tools Overview
+
+mongod
+mongo
+
+vagrant@m103:~$ find /usr/bin/ -name "mongo*"
+/usr/bin/mongoimport
+/usr/bin/mongoperf
+/usr/bin/mongotop
+/usr/bin/mongostat
+/usr/bin/mongoexport
+/usr/bin/mongoldap
+/usr/bin/mongodump
+/usr/bin/mongodecrypt
+/usr/bin/mongod
+/usr/bin/mongorestore
+/usr/bin/mongo
+/usr/bin/mongos
+/usr/bin/mongofiles
+
+
+Focus:
+	mongostat
+	mongodump
+	mongorestore
+	mongoexpoert
+	mongoimport
+
+
+Lecture Instructions
+
+List mongodb binaries:
+
+find /usr/bin/ -name "mongo*"
+Create new dbpath and launch mongod:
+
+mkdir -p ~/first_mongod
+mongod --port 30000 --dbpath ~/first_mongod --logpath ~/first_mongod/mongodb.log --fork
+
+Use mongostat to get stats on a running mongod process:
+
+mongostat --help
+mongostat --port 27000 -u "m103-admin" -p "m103-pass" --authenticationDatabase admin
+insert query update delete getmore command dirty used flushes vsize   res qrw arw net_in net_out conn                time
+    *0    *0     *0     *0       0     2|0  0.0% 0.0%       0 1.06G 57.0M 0|0 1|0   158b   61.4k    1 Apr 15 22:48:21.218
+    *0    *0     *0     *0       0     1|0  0.0% 0.0%       0 1.06G 57.0M 0|0 1|0   157b   60.8k    1 Apr 15 22:48:22.222
+^C2019-04-15T22:48:23.105+0000	signal 'interrupt' received; forcefully terminating
+
+
+Use mongodump to get a BSON dump of a MongoDB collection:
+
+mongodump --help
+mongodump --port 27000 --db applicationData --collection products
+ls dump/applicationData/
+cat dump/applicationData/products.metadata.json
+Use mongorestore to restore a MongoDB collection from a BSON dump:
+
+
+mongorestore --drop --port 30000 dump/
+Use mongoexport to export a MongoDB collection to JSON or CSV (or stdout!):
+
+
+mongoexport --help
+mongoexport --port 30000 --db applicationData --collection products
+mongoexport --port 30000 --db applicationData --collection products -o products.json
+Tail the exported JSON file:
+
+tail products.json
+Use mongoimport to create a MongoDB collection from a JSON or CSV file:
+mongoimport --port 30000 products.json
+
+#####################################################
