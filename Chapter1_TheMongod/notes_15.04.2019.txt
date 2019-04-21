@@ -805,4 +805,49 @@ tail products.json
 Use mongoimport to create a MongoDB collection from a JSON or CSV file:
 mongoimport --port 30000 products.json
 
+
+
+
+Which of the following are true differences between mongoexport and mongodump?
+	Mongodump outputs BSON, but mongoexport outputs JSON.
+	Mongodump can create a data file and a metadata file, but mongoexport just creates a data file.
+	By default, mongoexport sends output to standard output, but mongodump writes to a file.
+
+
+
+Incorrect answers:
+
+Mongoexport outputs BSON, but mongodump outputs JSON.
+
+	The reverse is true - mongoexport outputs JSON, and mongodump outputs BSON.
+
+Mongoexport is typically faster than mongodump.
+
+	Mongoexport must convert every document from BSON to JSON. This takes much longer than mongodump, which simply outputs BSON.
+
+All other answers are correct.
+
 #####################################################
+Lab - Importing a Dataset
+
+
+Import the whole dataset with your application's user m103-application-user 
+into a collection called products, in the database applicationData.
+
+mongoimport --db applicationData --collection products --file products.json --username m103-application-user --password m103-application-pass --authenticationDatabase admin --port 27000
+
+mongo --username m103-application-user --password m103-application-pass --authenticationDatabase admin --port 27000
+
+mongo --username m103-application-user --password m103-application-pass --authenticationDatabase admin --port 27000
+
+MongoDB Enterprise > use applicationData
+switched to db applicationData
+MongoDB Enterprise > show collections
+music_albums
+products
+
+
+
+mongoimport --drop --port 27000 -u "m103-application-user" \
+-p "m103-application-pass" --authenticationDatabase "admin" \
+--db applicationData --collection products /dataset/products.json
