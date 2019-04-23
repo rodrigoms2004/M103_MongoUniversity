@@ -1,0 +1,231 @@
+#####################################################
+# Key for the replicaset
+
+sudo mkdir -p /var/mongodb/pki
+sudo chown vagrant:vagrant -R /var/mongodb
+openssl rand -base64 741 > /var/mongodb/pki/m103-keyfile
+chmod 600 /var/mongodb/pki/m103-keyfile
+
+
+#####################################################
+# creating db path
+
+mkdir /var/mongodb/db/{1,2,3}
+
+#####################################################
+# Node1 file mongod-repl-1.conf
+
+storage:
+  dbPath: /var/mongodb/db/1
+net:
+  bindIp: 192.168.103.100,localhost,m103.mongodb.university
+  port: 27001
+security:
+  authorization: enabled
+  keyFile: /var/mongodb/pki/m103-keyfile
+systemLog:
+  destination: file
+  path: /var/mongodb/db/mongod1.log
+  logAppend: true
+processManagement:
+  fork: true
+replication:
+  replSetName: m103-repl
+
+
+#####################################################
+# Node2 file mongod-repl-2.conf
+
+storage:
+  dbPath: /var/mongodb/db/2
+net:
+  bindIp: 192.168.103.100,localhost,m103.mongodb.university
+  port: 27002
+security:
+  authorization: enabled
+  keyFile: /var/mongodb/pki/m103-keyfile
+systemLog:
+  destination: file
+  path: /var/mongodb/db/mongod2.log
+  logAppend: true
+processManagement:
+  fork: true
+replication:
+  replSetName: m103-repl
+
+#####################################################
+# Node3 file mongod-repl-3.conf
+
+storage:
+  dbPath: /var/mongodb/db/3
+net:
+  bindIp: 192.168.103.100,localhost,m103.mongodb.university
+  port: 27003
+security:
+  authorization: enabled
+  keyFile: /var/mongodb/pki/m103-keyfile
+systemLog:
+  destination: file
+  path: /var/mongodb/db/mongod3.log
+  logAppend: true
+processManagement:
+  fork: true
+replication:
+  replSetName: m103-repl
+
+#####################################################
+# Starting node 1 
+
+mongod -f mongod-repl-1.conf 
+
+# access it
+mongo --port 27001
+
+# initiate rs
+rs.initiate()
+
+# Because the replica set uses a keyfile for internal authentication, clients must authenticate before performing any actions.
+
+use admin
+db.createUser({
+    user: "m103-admin",
+    pwd: "m103-pass",
+    roles: [
+        {role: "root", db: "admin"}
+    ]
+})
+
+# connecting in it
+mongo --host "m103-repl/192.168.103.100:27001" -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
+
+
+#####################################################
+# initiate the other two nodes
+
+mongod -f mongod-repl-2.conf 
+mongod -f mongod-repl-3.conf 
+
+#####################################################
+# add the other two nodes
+
+rs.add("192.168.103.100:27002")
+rs.add("192.168.103.100:27003")
+
+#####################################################
+# checking it
+rs.status()
+{
+	"set" : "m103-repl",
+	"date" : ISODate("2019-04-22T14:50:55.719Z"),
+	"myState" : 1,
+	"term" : NumberLong(1),
+	"syncingTo" : "",
+	"syncSourceHost" : "",
+	"syncSourceId" : -1,
+	"heartbeatIntervalMillis" : NumberLong(2000),
+	"optimes" : {
+		"lastCommittedOpTime" : {
+			"ts" : Timestamp(1555944640, 3),
+			"t" : NumberLong(1)
+		},
+		"readConcernMajorityOpTime" : {
+			"ts" : Timestamp(1555944640, 3),
+			"t" : NumberLong(1)
+		},
+		"appliedOpTime" : {
+			"ts" : Timestamp(1555944640, 3),
+			"t" : NumberLong(1)
+		},
+		"durableOpTime" : {
+			"ts" : Timestamp(1555944640, 3),
+			"t" : NumberLong(1)
+		}
+	},
+	"members" : [
+		{
+			"_id" : 0,
+			"name" : "192.168.103.100:27001",
+			"health" : 1,
+			"state" : 1,
+			"stateStr" : "PRIMARY",
+			"uptime" : 108,
+			"optime" : {
+				"ts" : Timestamp(1555944640, 3),
+				"t" : NumberLong(1)
+			},
+			"optimeDate" : ISODate("2019-04-22T14:50:40Z"),
+			"syncingTo" : "",
+			"syncSourceHost" : "",
+			"syncSourceId" : -1,
+			"infoMessage" : "could not find member to sync from",
+			"electionTime" : Timestamp(1555944568, 2),
+			"electionDate" : ISODate("2019-04-22T14:49:28Z"),
+			"configVersion" : 3,
+			"self" : true,
+			"lastHeartbeatMessage" : ""
+		},
+		{
+			"_id" : 1,
+			"name" : "192.168.103.100:27002",
+			"health" : 1,
+			"state" : 2,
+			"stateStr" : "SECONDARY",
+			"uptime" : 15,
+			"optime" : {
+				"ts" : Timestamp(1555944640, 3),
+				"t" : NumberLong(1)
+			},
+			"optimeDurable" : {
+				"ts" : Timestamp(1555944640, 3),
+				"t" : NumberLong(1)
+			},
+			"optimeDate" : ISODate("2019-04-22T14:50:40Z"),
+			"optimeDurableDate" : ISODate("2019-04-22T14:50:40Z"),
+			"lastHeartbeat" : ISODate("2019-04-22T14:50:54.719Z"),
+			"lastHeartbeatRecv" : ISODate("2019-04-22T14:50:55.241Z"),
+			"pingMs" : NumberLong(0),
+			"lastHeartbeatMessage" : "",
+			"syncingTo" : "192.168.103.100:27001",
+			"syncSourceHost" : "192.168.103.100:27001",
+			"syncSourceId" : 0,
+			"infoMessage" : "",
+			"configVersion" : 3
+		},
+		{
+			"_id" : 2,
+			"name" : "192.168.103.100:27003",
+			"health" : 1,
+			"state" : 2,
+			"stateStr" : "SECONDARY",
+			"uptime" : 15,
+			"optime" : {
+				"ts" : Timestamp(1555944640, 3),
+				"t" : NumberLong(1)
+			},
+			"optimeDurable" : {
+				"ts" : Timestamp(1555944640, 3),
+				"t" : NumberLong(1)
+			},
+			"optimeDate" : ISODate("2019-04-22T14:50:40Z"),
+			"optimeDurableDate" : ISODate("2019-04-22T14:50:40Z"),
+			"lastHeartbeat" : ISODate("2019-04-22T14:50:54.719Z"),
+			"lastHeartbeatRecv" : ISODate("2019-04-22T14:50:55.276Z"),
+			"pingMs" : NumberLong(0),
+			"lastHeartbeatMessage" : "",
+			"syncingTo" : "192.168.103.100:27001",
+			"syncSourceHost" : "192.168.103.100:27001",
+			"syncSourceId" : 0,
+			"infoMessage" : "",
+			"configVersion" : 3
+		}
+	],
+	"ok" : 1,
+	"operationTime" : Timestamp(1555944640, 3),
+	"$clusterTime" : {
+		"clusterTime" : Timestamp(1555944640, 3),
+		"signature" : {
+			"hash" : BinData(0,"4U17LU6qAZZQJY5+MymOw0O5KJE="),
+			"keyId" : NumberLong("6682731042538782721")
+		}
+	}
+}

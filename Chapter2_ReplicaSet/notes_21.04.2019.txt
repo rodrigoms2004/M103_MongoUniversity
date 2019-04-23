@@ -69,18 +69,1091 @@ Recap
     Members can have different roles and specific purposes
 
 #####################################################
+Replication
+
+Three nodes:
+
+storage:
+  dbPath: /var/mongodb/db/node1
+net:
+  bindIp: 192.168.103.100,localhost,m103.mongodb.university
+  port: 27011
+security:
+  authorization: enabled
+  keyFile: /var/mongodb/pki/m103-keyfile
+systemLog:
+  destination: file
+  path: /var/mongodb/db/node1/mongod.log
+  logAppend: true
+processManagement:
+  fork: true
+replication:
+  replSetName: m103-example
+
+# Creating the keyfile and setting permissions on it:
+sudo mkdir -p /var/mongodb/pki/
+sudo chown vagrant:vagrant /var/mongodb/pki/
+openssl rand -base64 741 > /var/mongodb/pki/m103-keyfile
+chmod 400 /var/mongodb/pki/m103-keyfile
+
+# Creating the dbpath for nodes 1, 2 and 3
+mkdir -p /var/mongodb/db/node1
+mkdir -p /var/mongodb/db/{node2,node3}
+
+
+# Starting mongod with node1.conf
+mongod -f node1.conf
+    about to fork child process, waiting until server is ready for connections.
+    forked process: 2065
+    child process started successfully, parent exiting
+
+# Starting mongod with nodes 2 and 3
+vagrant@m103:~/replicaSet$ mongod -f node2.conf 
+    about to fork child process, waiting until server is ready for connections.
+    forked process: 2346
+    child process started successfully, parent exiting
+vagrant@m103:~/replicaSet$ mongod -f node3.conf 
+    about to fork child process, waiting until server is ready for connections.
+    forked process: 2376
+    child process started successfully, parent exiting
+
+
+# Initiate it
+MongoDB Enterprise > rs.initiate()
+{
+	"info2" : "no configuration specified. Using a default configuration for the set",
+	"me" : "192.168.103.100:27011",
+	"ok" : 1
+}
+
+# Create a user for the set
+use admin
+db.createUser({
+    user: "m103-admin",
+    pwd: "m103-pass",
+    roles: [
+        {role: "root", db: "admin"}
+    ]
+})
+
+MongoDB Enterprise m103-example:OTHER> use admin
+switched to db admin
+MongoDB Enterprise m103-example:PRIMARY> db.createUser({
+...     user: "m103-admin",
+...     pwd: "m103-pass",
+...     roles: [
+...         {role: "root", db: "admin"}
+...     ]
+... })
+Successfully added user: {
+	"user" : "m103-admin",
+	"roles" : [
+		{
+			"role" : "root",
+			"db" : "admin"
+		}
+	]
+}
+MongoDB Enterprise m103-example:PRIMARY> exit
+
+# Connecting using user m103-admin
+mongo --host "m103-example/192.168.103.100:27011" -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
+
+# Getting replica set status:
+MongoDB Enterprise m103-example:PRIMARY> rs.status()
+{
+	"set" : "m103-example",
+	"date" : ISODate("2019-04-22T13:41:49.550Z"),
+	"myState" : 1,
+	"term" : NumberLong(1),
+	"syncingTo" : "",
+	"syncSourceHost" : "",
+	"syncSourceId" : -1,
+	"heartbeatIntervalMillis" : NumberLong(2000),
+	"optimes" : {
+		"lastCommittedOpTime" : {
+			"ts" : Timestamp(1555940500, 1),
+			"t" : NumberLong(1)
+		},
+		"readConcernMajorityOpTime" : {
+			"ts" : Timestamp(1555940500, 1),
+			"t" : NumberLong(1)
+		},
+		"appliedOpTime" : {
+			"ts" : Timestamp(1555940500, 1),
+			"t" : NumberLong(1)
+		},
+		"durableOpTime" : {
+			"ts" : Timestamp(1555940500, 1),
+			"t" : NumberLong(1)
+		}
+	},
+	"members" : [
+		{
+			"_id" : 0,
+			"name" : "192.168.103.100:27011",
+			"health" : 1,
+			"state" : 1,
+			"stateStr" : "PRIMARY",
+			"uptime" : 691,
+			"optime" : {
+				"ts" : Timestamp(1555940500, 1),
+				"t" : NumberLong(1)
+			},
+			"optimeDate" : ISODate("2019-04-22T13:41:40Z"),
+			"syncingTo" : "",
+			"syncSourceHost" : "",
+			"syncSourceId" : -1,
+			"infoMessage" : "",
+			"electionTime" : Timestamp(1555940049, 2),
+			"electionDate" : ISODate("2019-04-22T13:34:09Z"),
+			"configVersion" : 1,
+			"self" : true,
+			"lastHeartbeatMessage" : ""
+		}
+	],
+	"ok" : 1,
+	"operationTime" : Timestamp(1555940500, 1),
+	"$clusterTime" : {
+		"clusterTime" : Timestamp(1555940500, 1),
+		"signature" : {
+			"hash" : BinData(0,"IzPIB29Y52PKjn8eTZHI3mu4grM="),
+			"keyId" : NumberLong("6682711629286604801")
+		}
+	}
+}
+
+# Adding other member to replica set
+MongoDB Enterprise m103-example:PRIMARY> rs.add("m103.mongodb.university:27012")
+{
+	"ok" : 1,
+	"operationTime" : Timestamp(1555941648, 1),
+	"$clusterTime" : {
+		"clusterTime" : Timestamp(1555941648, 1),
+		"signature" : {
+			"hash" : BinData(0,"YASqRWquzWm84ET0vJjjqNCK1zA="),
+			"keyId" : NumberLong("6682711629286604801")
+		}
+	}
+}
+
+
+MongoDB Enterprise m103-example:PRIMARY> rs.add("m103.mongodb.university:27013")
+{
+	"ok" : 1,
+	"operationTime" : Timestamp(1555941666, 1),
+	"$clusterTime" : {
+		"clusterTime" : Timestamp(1555941666, 1),
+		"signature" : {
+			"hash" : BinData(0,"L70HjPL0/rCDSb5msxzRlDtgwEE="),
+			"keyId" : NumberLong("6682711629286604801")
+		}
+	}
+}
+
+
+# Getting an overview of the replica set topology
+
+MongoDB Enterprise m103-example:PRIMARY> rs.isMaster()
+{
+	"hosts" : [
+		"192.168.103.100:27011",
+		"m103.mongodb.university:27012",
+		"m103.mongodb.university:27013"
+	],
+	"setName" : "m103-example",
+	"setVersion" : 3,
+	"ismaster" : true,
+	"secondary" : false,
+	"primary" : "192.168.103.100:27011",
+	"me" : "192.168.103.100:27011",
+	"electionId" : ObjectId("7fffffff0000000000000002"),
+	"lastWrite" : {
+		"opTime" : {
+			"ts" : Timestamp(1555941700, 1),
+			"t" : NumberLong(2)
+		},
+		"lastWriteDate" : ISODate("2019-04-22T14:01:40Z"),
+		"majorityOpTime" : {
+			"ts" : Timestamp(1555941700, 1),
+			"t" : NumberLong(2)
+		},
+		"majorityWriteDate" : ISODate("2019-04-22T14:01:40Z")
+	},
+	"maxBsonObjectSize" : 16777216,
+	"maxMessageSizeBytes" : 48000000,
+	"maxWriteBatchSize" : 100000,
+	"localTime" : ISODate("2019-04-22T14:01:46.684Z"),
+	"logicalSessionTimeoutMinutes" : 30,
+	"minWireVersion" : 0,
+	"maxWireVersion" : 6,
+	"readOnly" : false,
+	"ok" : 1,
+	"operationTime" : Timestamp(1555941700, 1),
+	"$clusterTime" : {
+		"clusterTime" : Timestamp(1555941700, 1),
+		"signature" : {
+			"hash" : BinData(0,"uIiWR2IZb3q21HcjwOifRhF2UK4="),
+			"keyId" : NumberLong("6682711629286604801")
+		}
+	}
+}
+
+
+# Force another node as primary
+rs.stepDown()
+
+MongoDB Enterprise m103-example:PRIMARY> rs.stepDown()
+2019-04-22T14:04:40.561+0000 E QUERY    [thread1] Error: error doing query: failed: network error while attempting to run command 'replSetStepDown' on host '192.168.103.100:27011'  :
+DB.prototype.runCommand@src/mongo/shell/db.js:168:1
+DB.prototype.adminCommand@src/mongo/shell/db.js:186:16
+rs.stepDown@src/mongo/shell/utils.js:1352:12
+@(shell):1:1
+2019-04-22T14:04:40.565+0000 I NETWORK  [thread1] Marking host 192.168.103.100:27011 as failed :: caused by :: Location40657: Last known master host cannot be reached
+2019-04-22T14:04:40.567+0000 I NETWORK  [thread1] Socket closed remotely, no longer connected (idle 27 secs, remote host 192.168.103.100:27011)
+2019-04-22T14:04:40.570+0000 I NETWORK  [thread1] Successfully connected to 192.168.103.100:27011 (1 connections now open to 192.168.103.100:27011 with a 5 second timeout)
+2019-04-22T14:04:40.571+0000 W NETWORK  [thread1] Unable to reach primary for set m103-example
+2019-04-22T14:04:41.072+0000 W NETWORK  [thread1] Unable to reach primary for set m103-example
+2019-04-22T14:04:41.574+0000 W NETWORK  [thread1] Unable to reach primary for set m103-example
+2019-04-22T14:04:42.076+0000 W NETWORK  [thread1] Unable to reach primary for set m103-example
+MongoDB Enterprise m103-example:PRIMARY> 
+
+# running isMaster again...
+
+MongoDB Enterprise m103-example:PRIMARY> rs.isMaster()
+{
+	"hosts" : [
+		"192.168.103.100:27011",
+		"m103.mongodb.university:27012",
+		"m103.mongodb.university:27013"
+	],
+	"setName" : "m103-example",
+	"setVersion" : 3,
+	"ismaster" : true,
+	"secondary" : false,
+	"primary" : "m103.mongodb.university:27012",
+	"me" : "m103.mongodb.university:27012",
+...
+
+#####################################################
+# REPLICATION CONFIGURATION DOCUMENT
+
+- JSON Object that defines the configuration options of our replica set
+- Can be configured manually from the shell
+- There are set of mongo shell replication helper methods that make it easier to manage
+
+rs.add
+rs.initiate
+rs.remove
+rs.reconfig
+rs.config
+
+
+{
+    _id: <string>,                          
+    version: <int>,
+    members: [
+        {
+            _id: <int>,
+            host: <string>,
+            arbiterOnly: <boolean>,
+            hidden: <boolean>,
+            priority: <number>,
+            slaveDelay: <int>,
+        },
+        ...
+    ],
+}
+settings: 
+
+
+
+mongod --replSet m103-example
+
+#############################
+# /etc/mongodb.conf
+...
+replication:
+    replSetName: m103-example
+...
+
+#############################
+version: 1
+rs.add('node2:27017')
+version: 2
+rs.add('node3:27017')
+version: 3
+
+config["hosts"][0]["votes"] = 10
+rs.reconfig(config)
+version: 4
+
+#############################
+
+
+{
+    _id: m103-example,                          
+    version: 4,
+    members: [
+        {
+            _id: 1,                 # unique identifier
+            host: m103:27017,
+            arbiterOnly: false,
+            hidden: false,
+            priority: 1,            # between 0 and 1000, higher priority make a member be elected more often
+            slaveDelay: 0,      # replication delay in seconds, default 0
+        },
+        ...
+    ],
+}
+
+members that have arbiterOnly or hidden equal to TRUE must have priority zero
+
+
+#####################################################
+REPLICATION COMMANDS
+
+rs.status()
+    reports health on replica set nodes
+    use data from heartbeats
+
+##################
+rs.isMaster()
+    describers a node's role in the replica set
+    shorter output than rs.status()
+
+MongoDB Enterprise m103-repl:PRIMARY> rs.isMaster
+function () {
+    return db.isMaster();
+}
+
+##################
+db.serverStatus()['repl']
+    section of the db.serverStatus() output
+    similar to the output of rs.isMaster()
+    same as isMaster but with field "rbid"
+
+##################
+rs.printReplicationInfo()
+    only returns oplog data relative to current node
+    contains timestamps for first and last oplog events
+
+    configured oplog size:   1700.7847652435303MB
+    log length start to end: 1672secs (0.46hrs)
+    oplog first event time:  Mon Apr 22 2019 14:49:28 GMT+0000 (UTC)
+    oplog last event time:   Mon Apr 22 2019 15:17:20 GMT+0000 (UTC)
+    now:                     Mon Apr 22 2019 15:17:28 GMT+0000 (UTC)
+
+What information can be obtained from running rs.printReplicationInfo()?
+
+Correct answers:
+
+The time of the earliest entry in the oplog.
+
+The time of the latest entry in the oplog.
+
+rs.printReplicationInfo() gives us the times of the earliest and latest entries in the oplog.
+
+Incorrect answers:
+
+The earliest statement entered in the oplog.
+
+The last statement entered in the oplog.
+
+rs.printReplicationInfo() will only return timestamps for oplog statements; the statements themselves can be found in local.oplog.rs.
+
+The current primary in the replica set.
+
+rs.printReplicationInfo() only contains information pertaining to the node where the command was run.
+
+#####################################################
+LOCAL DB PART 1
+
+mkdir allbymyselfdb
+mongod --dbpath allbymyselfdb
+
+mongo
+
+show dbs
+MongoDB Enterprise > show dbs
+admin   0.000GB                     # administration data
+config  0.000GB                     
+local   0.000GB                    
+
+MongoDB Enterprise > use local
+switched to db local
+MongoDB Enterprise > show collections
+startup_log
+
+#######################
+#Now in the replica set
+
+MongoDB Enterprise m103-repl:PRIMARY> use local
+switched to db local
+MongoDB Enterprise m103-repl:PRIMARY> show collections
+me
+oplog.rs
+replset.election
+replset.minvalid
+startup_log
+system.replset
+system.rollback.id
+
+oplog.rs is thr central point of replication mechanism
+Capped Collection: limited to a specific size
+    var stats = db.oplog.rs.stats()
+    stats.capped
+        true
+    stats.size
+        33028
+    stats.maxSize
+        NumberLong(1783402086)
+
+    # see in mbytes unit
+    var stats = db.oplog.rs.stats(1024*1024)
+    stats.maxSize
+        1700
+
+# BY DEFAULT oplog.rs collection will take 5% of the disk
+
+# Getting current oplog data (including first and last event times, and configured oplog size
+rs.printReplicationInfo()
+
+rs.printReplicationInfo()
+    configured oplog size:   1700.7847652435303MB
+    log length start to end: 2979secs (0.83hrs)
+    oplog first event time:  Mon Apr 22 2019 14:49:28 GMT+0000 (UTC)
+    oplog last event time:   Mon Apr 22 2019 15:39:07 GMT+0000 (UTC)
+    now:                     Mon Apr 22 2019 15:39:12 GMT+0000 (UTC)
+
+
+
+#####################################################
+LOCAL DB PART 2
+
+oplog.rs
+
+Capped Collection
+    Replication Window is proportional to the system load
+    One operation may result in many oplog.rs entries
+
+
+Lecture Instructions
+
+Create new namespace m103.messages:
+
+use m103
+db.createCollection('messages')
+Query the oplog, filtering out the heartbeats ("periodic noop") and only returning the latest entry:
+
+use local
+db.oplog.rs.find( { "o.msg": { $ne: "periodic noop" } } ).sort( { $natural: -1 } ).limit(1).pretty()
+Inserting 100 different documents:
+
+use m103
+for ( i=0; i< 100; i++) { db.messages.insert( { 'msg': 'not yet', _id: i } ) }
+db.messages.count()
+Querying the oplog to find all operations related to m103.messages:
+
+use local
+db.oplog.rs.find({"ns": "m103.messages"}).sort({$natural: -1})
+Illustrating that one update statement may generate many entries in the oplog:
+
+use m103
+db.messages.updateMany( {}, { $set: { author: 'norberto' } } )
+use local
+db.oplog.rs.find( { "ns": "m103.messages" } ).sort( { $natural: -1 } )
+Remember, even though you can write data to the local db, you should not.
+
+#####################################################
+#####################################################
+#####################################################
+PLEASE DON'T TOUCH THIS!
+me
+oplog.rs
+replset.election
+replset.minvalid
+startup_log
+system.replset
+system.rollback.id
+
+ANY DATA PUT IN local database will NOT BE REPLICATED
+
+local databases is like Vegas, what happens in local stay in local
+#####################################################
+#####################################################
+#####################################################
+
+RECAP:
+    - local database holds important information
+    - oplog.rs is central to our replication mechanism
+    - the size of our oplog will impact the replication Window
+    - any data written to our local database does not get replicated to other nodes
+
+
+Correct answers:
+
+The local database will not be replicated.
+
+    Any data written to this database will not be replicated across the different nodes of the set.
+
+The oplog.rs collection contains all operations that will be replicated.
+
+    The oplog.rs collection holds all the statements that get replicated across the different replica set members.
+
+
+Incorrect answers:
+
+You cannot write to the local database.
+
+    Given the correct permissions, an authorized user can write data to the local db. That said, we strongly advise against that.
+
+The local database does not allow the creation of other collections.
+
+    Although we discourage it, you can write new collections to the local database.
+
+We should drop the oplog.rs collection from time to time to avoid it becoming too big.
+
+    We cap the oplog.rs collection instead of dropping it entirely.
+
+#####################################################
+# Reconfiguring a Running Replica Set
+
+
+mkdir /var/mongodb/db/{node4,arbiter}
+
+# Add two new nodes, a node and an arbiter
+
+# node4.conf file
+storage:
+  dbPath: /var/mongodb/db/node4
+net:
+  bindIp: 192.168.103.100,localhost,m103.mongodb.university
+  port: 27014
+systemLog:
+  destination: file
+  path: /var/mongodb/db/node4/mongod.log
+  logAppend: true
+processManagement:
+  fork: true
+replication:
+  replSetName: m103-example
+
+
+# arbiter.conf file
+storage:
+  dbPath: /var/mongodb/db/arbiter
+net:
+  bindIp: 192.168.103.100,localhost
+  port: 28000
+systemLog:
+  destination: file
+  path: /var/mongodb/db/arbiter/mongod.log
+  logAppend: true
+processManagement:
+  fork: true
+replication:
+  replSetName: m103-example
+
+
+# Starting up mongod processes for our fourth node and arbiter:
+mongod -f node4.conf
+mongod -f arbiter.conf
+
+# From the Mongo shell of the replica set, adding the new secondary and the new arbiter:
+rs.add("m103.mongodb.university:27014")
+rs.addArb("m103.mongodb.university:28000")
+
+# Checking replica set makeup after adding two new nodes:
+rs.isMaster()
+{
+	"hosts" : [
+		"192.168.103.100:27011",
+		"m103.mongodb.university:27012",
+		"m103.mongodb.university:27013",
+		"m103.mongodb.university:27014"
+	],
+	"arbiters" : [
+		"m103.mongodb.university:28000"
+	],
+...
+
+# Removing the arbiter from our replica set:
+rs.remove("m103.mongodb.university:28000")
+
+# Assigning the current configuration to a shell variable we can edit, in order to reconfigure the replica set:
+cfg = rs.conf()
+
+		{
+			"_id" : 3,
+			"host" : "m103.mongodb.university:27014",
+			"arbiterOnly" : false,
+			"buildIndexes" : true,
+			"hidden" : false,
+			"priority" : 1,
+			"tags" : {
+				
+			},
+			"slaveDelay" : NumberLong(0),
+			"votes" : 1
+		}
+
+# Editing our new variable cfg to change topology - specifically, by modifying cfg.members:
+
+cfg.members[3].votes = 0
+cfg.members[3].hidden = true
+cfg.members[3].priority = 0
+
+# Updating our replica set to use the new configuration cfg:
+rs.reconfig(cfg)
+
+		{
+			"_id" : 3,
+			"host" : "m103.mongodb.university:27014",
+			"arbiterOnly" : false,
+			"buildIndexes" : true,
+			"hidden" : true,
+			"priority" : 0,
+			"tags" : {
+				
+			},
+			"slaveDelay" : NumberLong(0),
+			"votes" : 0
+		}
 
 
 #####################################################
 
+Reconfiguring a Running Replica Set
+Correct answers:
+
+Hidden nodes vote in elections.
+    Hidden nodes can never become the primary, but they can still vote in elections.
+
+Hidden nodes replicate data.
+    Hidden nodes replicate data from the primary, although they are invisible to client applications.
+
+Incorrect answers:
+    Hidden nodes can become primary.
+
+Hidden nodes must have priority 0.
+Hidden nodes are a type of arbiter.
+    Hidden nodes and arbiters are different types of replica set members; 
+    arbiters hold no data while hidden nodes replicate from the oplog.
+
+Secondary nodes must be restarted before converting to hidden nodes.
+    Secondary nodes can be converted to hidden nodes while the replica set is running, using rs.reconfig().
+
+#####################################################
+Reads and Writes on a Replica Set
+
+# connect to the replicaset
+mongo --host "m103-example/m103.mongodb.university:27011" -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
+
+# check we are connected to the primary
+rs.isMaster()
+{
+	"hosts" : [
+		"192.168.103.100:27011",
+		"m103.mongodb.university:27012",
+		"m103.mongodb.university:27013"
+	],
+	"setName" : "m103-example",
+	"setVersion" : 7,
+	"ismaster" : true,
+	"secondary" : false,
+	"primary" : "192.168.103.100:27011",
+	"me" : "192.168.103.100:27011",
+...
+
+# create a new DB an insert a register
+use newDB
+db.new_collection.insert( { "student": "Matt Javaly", "grade": "A+" } )
+
+# connect to the secondary
+mongo --host "m103.mongodb.university:27012" -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
+
+# trying to show DBs, only read!
+SECONDARY> show dbs
+2019-04-22T20:37:16.794+0000 E QUERY    [thread1] Error: listDatabases failed:{
+	"operationTime" : Timestamp(1555965433, 1),
+	"ok" : 0,
+	"errmsg" : "not master and slaveOk=false",
+	"code" : 13435,
+	"codeName" : "NotMasterNoSlaveOk",
+	"$clusterTime" : {
+		"clusterTime" : Timestamp(1555965433, 1),
+		"signature" : {
+			"hash" : BinData(0,"L4ES4TipzeLJLoeZOu4rVf7j+UY="),
+			"keyId" : NumberLong("6682711629286604801")
+		}
+	}
+} :
+_getErrorWithCode@src/mongo/shell/utils.js:25:13
+
+# allow secondary to run queries
+SECONDARY> rs.slaveOk()
+
+# and show dbs works
+SECONDARY> show dbs
+admin   0.000GB
+config  0.000GB
+local   0.000GB
+newDB   0.000GB
+test    0.000GB
+
+# check db
+SECONDARY> use newDB
+switched to db newDB
+SECONDARY> show collections
+new_collection
+SECONDARY> db.new_collection.find()
+{ "_id" : ObjectId("5cbe252c07179a48d0f4d5e1"), "student" : "Matt Javaly", "grade" : "A+" }
+
+# Attempting to write data directly to a secondary node (this should fail, becouse we cannot write data directly to a secondary):
+db.new_collection.insert( { "student": "Norberto Leite", "grade": "B+" } )
+    SECONDARY> db.new_collection.insert( { "student": "Norberto Leite", "grade": "B+" } )
+    WriteResult({ "writeError" : { "code" : 10107, "errmsg" : "not master" } })
+
+# Shutting down the server (on both secondary nodes)
+SECONDARY> use admin
+switched to db admin
+SECONDARY> db.shutdownServer()
+
+# Connecting directly to the last healthy node in our set:
+mongo --host "m103.mongodb.university:27011" -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
+
+# Verifying that the last node stepped down to become a secondary when a majority of nodes in the set were not available:
+PRIMARY> rs.status()
+...
+	"members" : [
+...
+		{
+			"_id" : 1,
+			"name" : "m103.mongodb.university:27012",
+			"health" : 0,
+			"state" : 8,
+			"stateStr" : "(not reachable/healthy)",
+...
+
+
+# shutting down another node
+mongo --host "m103.mongodb.university:27013" -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
+
+# NOW with only one node the command below will not work, becouse there is not a replica set any more
+mongo --host "m103-example/m103.mongodb.university:27011" -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
+
+2019-04-22T20:52:40.716+0000 I NETWORK  [thread1] Starting new replica set monitor for m103-example/m103.mongodb.university:27011
+2019-04-22T20:52:40.718+0000 I NETWORK  [thread1] Successfully connected to m103.mongodb.university:27011 (1 connections now open to m103.mongodb.university:27011 with a 5 second timeout)
+2019-04-22T20:52:40.719+0000 W NETWORK  [ReplicaSetMonitor-TaskExecutor-0] Failed to connect to 127.0.1.1:27012, in(checking socket for error after poll), reason: Connection refused
+2019-04-22T20:52:40.719+0000 I NETWORK  [thread1] Successfully connected to 192.168.103.100:27011 (1 connections now open to 192.168.103.100:27011 with a 5 second timeout)
+2019-04-22T20:52:40.719+0000 W NETWORK  [ReplicaSetMonitor-TaskExecutor-0] Failed to connect to 127.0.1.1:27013, in(checking socket for error after poll), reason: Connection refused
+2019-04-22T20:52:40.719+0000 W NETWORK  [thread1] Unable to reach primary for set m103-example
+2019-04-22T20:52:40.720+0000 I NETWORK  [thread1] Successfully connected to 192.168.103.100:27011 (1 connections now open to 192.168.103.100:27011 with a 0 second timeout)
+2019-04-22T20:52:40.737+0000 W NETWORK  [thread1] Failed to connect to 127.0.1.1:27012, in(checking socket for error after poll), reason: Connection refused
+2019-04-22T20:52:40.738+0000 W NETWORK  [thread1] Failed to connect to 127.0.1.1:27013, in(checking socket for error after poll), reason: Connection refused
+2019-04-22T20:52:40.738+0000 W NETWORK  [thread1] Unable to reach primary for set m103-example
+2019-04-22T20:52:41.240+0000 W NETWORK  [thread1] Failed to connect to 127.0.1.1:27012, in(checking socket for error after poll), reason: Connection refused
+2019-04-22T20:52:41.240+0000 W NETWORK  [thread1] Failed to connect to 127.0.1.1:27013, in(checking socket for error after poll), reason: Connection refused
+2019-04-22T20:52:41.241+0000 W NETWORK  [thread1] Unable to reach primary for set m103-example
+^C2019-04-22T20:52:41.352+0000 E -        [main] Error saving history file: FileOpenFailed: Unable to open() file : No such file or directory
+2019-04-22T20:52:41.352+0000 I CONTROL  [main] shutting down with code:0
+
+
+# connecting directly to the node1, but now it is the SECONDARY
+mongo --host "m103.mongodb.university:27011" -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
+SECONDARY> 
+
+# secondary node, so is not possible to write anything in the replica set becouse there is no primary
+SECONDARY> rs.isMaster()
+{
+	"hosts" : [
+		"192.168.103.100:27011",
+		"m103.mongodb.university:27012",
+		"m103.mongodb.university:27013"
+	],
+	"setName" : "m103-example",
+	"setVersion" : 7,
+	"ismaster" : false,
+	"secondary" : true,
+	"me" : "192.168.103.100:27011",
+...
+
+#####################################################
+Failover and Elections
+
+Lecture Instructions
+
+# safe initiation election is made with:
+rs.stepDown()
+
+# a priority node 0 cannot run for election but still vote 
+
+# Elections are made in two cases:
+    1 - if a primary is unavailable
+    2 - it was performed rs.stepDown()
+
+# connect to the replicaset
+mongo --host "m103-example/m103.mongodb.university:27011" -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
+
+
+# Storing replica set configuration as a variable cfg:
+cfg = rs.conf()
+
+# Setting the priority of a node to 0, so it cannot become primary (making the node "passive"):
+cfg.members[2].priority = 0
+
+
+# Updating our replica set to use the new configuration cfg:
+rs.reconfig(cfg)
+
+# Checking the new topology of our set:
+rs.isMaster()
+
+PRIMARY> rs.isMaster()
+{
+	"hosts" : [
+		"192.168.103.100:27011",
+		"m103.mongodb.university:27012"
+	],
+	"passives" : [
+		"m103.mongodb.university:27013"
+	],
+...
+
+
+# Forcing an election in this replica set (although in this case, we rigged the election so only one node could become primary):
+rs.stepDown()
+
+# Checking the topology of our set after the election:
+rs.isMaster()
+{
+	"hosts" : [
+		"192.168.103.100:27011",
+		"m103.mongodb.university:27012"
+	],
+	"passives" : [
+		"m103.mongodb.university:27013"
+	],
+	"setName" : "m103-example",
+	"setVersion" : 8,
+	"ismaster" : true,
+	"secondary" : false,
+	"primary" : "m103.mongodb.university:27012",
+...
+
+IN A THREE NODE REPLICA SET A MAJORITY IS TWO NODES, IF TWO NODES ARE DOWN THE SURVIVOR WILL BECAME A SECONDARY
+BECOUSE IN THIS CASE IS 1 VS 2
+
+
+#####################################################
+Write Concerns: Part 1
+
+
+Durability
+|
+|       /
+|      /
+|     /
+|    /
+|   /
+|  /
+| /  
+|/
+---------------------------->
+0                           n
+
+Number of Replica Set Member Acknowledgements ("confirmação")
+
+
+# Write Concern Levels
+
+0           - Don't wait for acknowledgement
+1 (default) - Wait for acknowledgement from the primary only
+>=2         - Wait for acknowledgement from the primary and one or more secondaries
+"majority"  - Wait for acknowledgement from a majority of replica set members
+
+# Write Concern Options
+
+wtimeout:   < int > - the time to wait for the requested write concern before marking the operation as failed
+j (journal): < true|false > - requires the node to commit the write operation to the journal before returning an acknowledgement
+    false => store data in memory
+    true => store data in disk
+
+#####################################################
+Write Concerns: Part 2
+
+insert
+update
+delete
+findAndModify
+
+----------- db.products.insert({...})--------------->
+<---------- w:"Majority" acknowledgement ----------->
+Needs the ack from primary and one secondary node (considering a replicaset of three) to return ack to the application
+
+As the number of replica set nodes increase increase, more longer operation take long to be successful
+
+using wtimeout the app could waiting for amount of time before moving to another node.
+
+# Recap:
+
+- Write Concern is a system of acknowledgements that provides a level of durability guarantee
+- The trade off of higher write concern levels is the speed at which writes are committed
+- MongoDB supports write concern for all cluster types:
+    standalone, replica set, and sharded clusters
+
+Consider a 3-member replica set, where one secondary is offline. 
+Which of the following write concern levels can still return successfully?
+
+Answer: majority
+
+#####################################################
+Read Concerns
+
+# return only if data are in the majority of nodes
+db.products.find(
+    { "name": "things", ... }
+).readConcern( level: "majority")
+
+# Read Concern Levels
+- local, return the most recent data into the cluster, more from primary (default)
+- available (sharded clusters)
+- majority , return data only if data is in majority of replicaset members
+- linearizable, readonly
+
+FAST, SAFE, LATEST => MUST PICK TWO OF THEM
+
+1 - LATEST AND FAST: local & available
+    - No durability guarantee
+
+2 - FAST AND SAFE: majority
+    - reads are not guarantee to be the latest written data
+
+3 - SAFE AND LATEST: linearizable
+    - Reads my be slower than other read concern
+    - Single document reads only
+
+
+# RECAP
+- Read Concern is a way of requesting data that meets a specified level of durability
+- Read Concern options: local/available, majority, and linearizable
+- Use with write concern for best durability guarantees*
+
+* the two work together, but not depend on each other
+
+
+Q: Which of the following read concerns only return data from write operations that have been committed to a majority of nodes?
+A: majority and linearizable
+
+################
+None of the read concerns require you to specify a write concern. However, reads with the read concern majority 
+and linearizable will only return data that has been replicated to a majority of nodes in the replica set.
+The difference between majority and linearizable lies in sense of causal consistency that linearizable enforces.
+
+Let us look into this in detail:
+
+When reading from a replica set with readConcern majority all documents that have been majority committed by 
+the replica set will be returned to the application.
+
+In the following diagram we have a set of operations taking place:
+
+    W1 : first write operation
+    W2 : second write operation
+    RM : read with read concern majority.
+
+_____W1________>|               |                |
+                |_____W1'______>|_____W1'_______>|
+                |               |                |
+_____W2________>|               |                |
+                |               |                |
+_____RM________>|               |                |
+                |               |                |
+<---------------|               |                |
+                |               |                |
+                |_____W2'______>|                |
+                |               |                |
+                |               |_____W2'_______>|
+                |               |                |
+            Primary         Secondary           Secondary
+
+
+RM will return every document, matching the query selector, that has been majority committed, 
+by the time the server receives the RM. In this case, W1 would be returned.
 
 #####################################################
 
+Read concern linearizable will wait for all prior writes to be replicated to a majority 
+of nodes before it returns a response.
+
+In the following diagram we have:
+
+    W1 : first write operation
+    W2 : second write operation
+    RL : read with read concern linearizable
+
+_____W1________>|               |                |
+                |_____W1'______>|_____W1'_______>|
+                |               |                |
+_____W2________>|               |                |
+                |               |                |
+_____RL________>|               |                |
+                |               |                |
+                |_____W2'______>|                |
+                |               |                |
+<---------------|               |                |                
+                |               |_____W2'_______>|
+                |               |                |
+            Primary         Secondary           Secondary
+
+The response for the read operation will wait until all writes, received by the server prior to RL, 
+are majority committed before returning the document to the client. In this case, both W1 and W2 would be 
+available to be returned to the client.
 
 #####################################################
+Read Preference
 
+db.products.find(
+    {"name": "Mongo 101", ... }
+).readPref("secondaryPreferred")
 
+makes the application prefers to search secondary member instead of primary one
 
+# Read Preference Modes
+- primary (default)
+- primaryPreferred, if secondary members are not available routes to primary
+- secondary
+- secondaryPreferred, if secondary members are not available routes to primary
+- nearest, nearest member in the network, typical for geographically closest member
 
+Scenario                    
+- Read from primary only
+    TRADEOFF: Secondaries are for availability only
+    READ_PREFERENCE: primary (default)
 
+- if the primary is unavailable, read from secondary
+    TRADEOFF: Possible to read stale* data
+    READ_PREFERENCE: primaryPreferred
+
+- Read from the secondary members only
+    TRADEOFF: Possible to read stale* data 
+    READ_PREFERENCE: secondary
+
+- if all secondaries are unavailable, read from the primary
+    TRADEOFF: Possible to read stale* data
+    READ_PREFERENCE: secondaryPreferred
+
+- Application's read from the geographically closest member
+    TRADEOFF: Possible to read stale* data
+    READ_PREFERENCE: nearest
+
+*obsoleto
+
+# RECAP
+- Read Preference lets you route read operations to specific replica search members
+- Every read preference other than primary can return stale reads
+- nearest supports geographically local reads
+
+# Which of the following read preference options may result in stale data?
+# neares, primaryPreferred, secondaryPreferred, secondary
 
