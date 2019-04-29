@@ -758,7 +758,7 @@ db.products.find( { "sku" : ... } )
 db.products.find( { "sku" : ..., "type" : ... } )
 db.products.find( { "sku" : ..., "type" : ..., "name" : ... } )
 
-Scatter-gather queries, you can't perform targetable query, becaouse is not included
+Scatter-gather queries, you can't perform targetable query, because is not included
 the full prefix leading up to either of these fields 
 db.products.find( { "type" : ... } )
 db.products.find( { "name" : ... } )

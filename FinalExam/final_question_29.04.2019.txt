@@ -1,0 +1,361 @@
+
+#################################################################################
+Question 1
+Which of the following are valid command line instructions to start a mongod? 
+You may assume that all specified files already exist.
+
+
+# incorrect, must have dbpath and --authentication does not exists, instead of use --auth 
+mongod --log /var/log/mongo/mongod.log --authentication
+
+# CORRECT, run process in default port 27017 host local host
+mongod --logpath /var/log/mongo/mongod.log --dbpath /data/db --fork
+
+# CORRECT, run process using .conf file
+mongod -f /etc/mongod.conf
+
+# incorrect, --fork has to be used with --logpath or --syslog
+mongod --dbpath /data/db --fork
+
+#################################################################################
+Question 2
+Given the following config file:
+
+storage:
+  dbPath: /data/db
+systemLog:
+  destination: file
+  path: /var/log/mongod.log
+net:
+  bindIp: localhost,192.168.0.100
+security:
+  keyFile: /var/pki/keyfile
+processManagement:
+  fork: true
+
+How many directories must MongoDB have access to? Disregard the path to the configuration file itself.
+
+Answer: 3, they are: /data/db, /var/log and /var/pki
+
+#################################################################################
+Question 3
+Given the following output from rs.status().members:
+[
+  {
+    "_id": 0,
+    "name": "localhost:27017",
+    "health": 1,
+    "state": 1,
+    "stateStr": "PRIMARY",
+    "uptime": 548,
+    "optime": {
+      "ts": Timestamp(1521038871, 1),
+      "t": NumberLong("1")
+    },
+    "optimeDate": ISODate("2018-03-14T14:47:51Z"),
+    "electionTime": Timestamp(1521038358, 2),
+    "electionDate": ISODate("2018-03-14T14:39:18Z"),
+    "configVersion": 2,
+    "self": true
+  },
+  {
+    "_id": 1,
+    "name": "localhost:27018",
+    "health": 1,
+    "state": 2,
+    "stateStr": "SECONDARY",
+    "uptime": 289,
+    "optime": {
+      "ts": Timestamp(1521038871, 1),
+      "t": NumberLong("1")
+    },
+    "optimeDurable": {
+      "ts": Timestamp(1521038871, 1),
+      "t": NumberLong("1")
+    },
+    "optimeDate": ISODate("2018-03-14T14:47:51Z"),
+    "optimeDurableDate": ISODate("2018-03-14T14:47:51Z"),
+    "lastHeartbeat": ISODate("2018-03-14T14:47:56.558Z"),
+    "lastHeartbeatRecv": ISODate("2018-03-14T14:47:56.517Z"),
+    "pingMs": NumberLong("0"),
+    "syncingTo": "localhost:27022",
+    "configVersion": 2
+  },
+  {
+    "_id": 2,
+    "name": "localhost:27019",
+    "health": 1,
+    "state": 2,
+    "stateStr": "SECONDARY",
+    "uptime": 289,
+    "optime": {
+      "ts": Timestamp(1521038871, 1),
+      "t": NumberLong("1")
+    },
+    "optimeDurable": {
+      "ts": Timestamp(1521038871, 1),
+      "t": NumberLong("1")
+    },
+    "optimeDate": ISODate("2018-03-14T14:47:51Z"),
+    "optimeDurableDate": ISODate("2018-03-14T14:47:51Z"),
+    "lastHeartbeat": ISODate("2018-03-14T14:47:56.558Z"),
+    "lastHeartbeatRecv": ISODate("2018-03-14T14:47:56.654Z"),
+    "pingMs": NumberLong("0"),
+    "syncingTo": "localhost:27022",
+    "configVersion": 2
+  },
+  {
+    "_id": 3,
+    "name": "localhost:27020",
+    "health": 1,
+    "state": 2,
+    "stateStr": "SECONDARY",
+    "uptime": 289,
+    "optime": {
+      "ts": Timestamp(1521038871, 1),
+      "t": NumberLong("1")
+    },
+    "optimeDurable": {
+      "ts": Timestamp(1521038871, 1),
+      "t": NumberLong("1")
+    },
+    "optimeDate": ISODate("2018-03-14T14:47:51Z"),
+    "optimeDurableDate": ISODate("2018-03-14T14:47:51Z"),
+    "lastHeartbeat": ISODate("2018-03-14T14:47:56.558Z"),
+    "lastHeartbeatRecv": ISODate("2018-03-14T14:47:56.726Z"),
+    "pingMs": NumberLong("0"),
+    "syncingTo": "localhost:27022",
+    "configVersion": 2
+  },
+  {
+    "_id": 4,
+    "name": "localhost:27021",
+    "health": 0,
+    "state": 8,
+    "stateStr": "(not reachable/healthy)",
+    "uptime": 0,
+    "optime": {
+      "ts": Timestamp(0, 0),
+      "t": NumberLong("-1")
+    },
+    "optimeDurable": {
+      "ts": Timestamp(0, 0),
+      "t": NumberLong("-1")
+    },
+    "optimeDate": ISODate("1970-01-01T00:00:00Z"),
+    "optimeDurableDate": ISODate("1970-01-01T00:00:00Z"),
+    "lastHeartbeat": ISODate("2018-03-14T14:47:56.656Z"),
+    "lastHeartbeatRecv": ISODate("2018-03-14T14:47:12.668Z"),
+    "pingMs": NumberLong("0"),
+    "lastHeartbeatMessage": "Connection refused",
+    "configVersion": -1
+  },
+  {
+    "_id": 5,
+    "name": "localhost:27022",
+    "health": 1,
+    "state": 2,
+    "stateStr": "SECONDARY",
+    "uptime": 289,
+    "optime": {
+      "ts": Timestamp(1521038871, 1),
+      "t": NumberLong("1")
+    },
+    "optimeDurable": {
+      "ts": Timestamp(1521038871, 1),
+      "t": NumberLong("1")
+    },
+    "optimeDate": ISODate("2018-03-14T14:47:51Z"),
+    "optimeDurableDate": ISODate("2018-03-14T14:47:51Z"),
+    "lastHeartbeat": ISODate("2018-03-14T14:47:56.558Z"),
+    "lastHeartbeatRecv": ISODate("2018-03-14T14:47:55.974Z"),
+    "pingMs": NumberLong("0"),
+    "syncingTo": "localhost:27017",
+    "configVersion": 2
+  },
+  {
+    "_id": 6,
+    "name": "localhost:27023",
+    "health": 1,
+    "state": 2,
+    "stateStr": "SECONDARY",
+    "uptime": 289,
+    "optime": {
+      "ts": Timestamp(1521038871, 1),
+      "t": NumberLong("1")
+    },
+    "optimeDurable": {
+      "ts": Timestamp(1521038871, 1),
+      "t": NumberLong("1")
+    },
+    "optimeDate": ISODate("2018-03-14T14:47:51Z"),
+    "optimeDurableDate": ISODate("2018-03-14T14:47:51Z"),
+    "lastHeartbeat": ISODate("2018-03-14T14:47:56.558Z"),
+    "lastHeartbeatRecv": ISODate("2018-03-14T14:47:56.801Z"),
+    "pingMs": NumberLong("0"),
+    "syncingTo": "localhost:27022",
+    "configVersion": 2
+  }
+]
+
+At this moment, how many replica set members are eligible to become primary 
+in the event of the current Primary crashing or stepping down?
+
+Answer: 5, because there are 7 member, the member id 4 is down 
+...
+ {
+    "_id": 4,
+    "name": "localhost:27021",
+    "health": 0,
+    "state": 8,
+    "stateStr": "(not reachable/healthy)",
+    "uptime": 0,
+    "optime": {
+      "ts": Timestamp(0, 0),
+      "t": NumberLong("-1")
+    },
+...
+So the replica set has current 6 members active, if the primary (id 0) goes down, 
+lasts only 5 members to be choose to be a primary
+
+
+#################################################################################
+Question 4
+Given the following replica set configuration:
+
+conf = {
+  "_id": "replset",
+  "version": 1,
+  "protocolVersion": 1,
+  "members": [
+    {
+      "_id": 0,
+      "host": "192.168.103.100:27017",
+      "priority": 2,
+      "votes": 1
+    },
+    {
+      "_id": 0,
+      "host": "192.168.103.100:27018",
+      "priority": 1,
+      "votes": 1
+    },
+    {
+      "_id": 2,
+      "host": "192.168.103.100:27018",
+      "priority": 1,
+      "votes": 1
+    }
+  ]
+}
+
+What ERRORS are present in the above replica set configuration?
+
+# CORRECT, Take a look in the ids from two first members, both have _id 0,
+        the second and the third member has the sames host info 192.168.103.100:27018
+You cannot specify the same host information among multiple members.
+You cannot specify two members with the same _id.
+
+# incorrect, there is no limit, but keep number even!
+    the priority could be between 0 and 1000, higher priority make a member be elected more often
+You cannot have three members in a replica set.
+You can only specify a priority of 0 or 1, member "_id": 0 is incorrectly configured.
+
+
+#################################################################################
+Question 5
+Given the following replica set configuration:
+
+conf = {
+  "_id": "replset",
+  "version": 1,
+  "protocolVersion": 1,
+  "members": [
+    {
+      "_id": 0,
+      "host": "localhost:27017",
+      "priority": 1,
+      "votes": 1
+    },
+    {
+      "_id": 1,
+      "host": "localhost:27018",
+      "priority": 1,
+      "votes": 1
+    },
+    {
+      "_id": 2,
+      "host": "localhost:27019",
+      "priority": 1,
+      "votes": 1
+    },
+    {
+      "_id": 3,
+      "host": "localhost:27020",
+      "priority": 0,
+      "votes": 0,
+      "slaveDelay": 3600
+    }
+  ]
+}
+
+What is the most likely role served by the node with "_id": 3?
+
+# CORRECT: 
+It serves as a "hot" backup of data in case of accidental data loss on the other members, 
+like a DBA accidentally dropping the database.
+
+      "_id": 3,
+      "host": "localhost:27020",
+      "priority": 0,
+      "votes": 0,
+      "slaveDelay": 3600
+
+In the config above, slave delay replication of one hour or 3600 seconds
+
+HIDDEN, provides specific read-only workloads, or have copies over your data which are hidden from the application.
+hidden nodes can also be set with a delay in their process, its called delayed nodes. The purpose of having DELAYED nodes 
+is to allow resilience to application level corruption, without relying on cold backup files to recover from such event. 
+ITS ENABLING US TO HAVE HOT BACKUPS
+
+Hidden nodes vote in elections.
+Hidden nodes can never become the primary, but they can still vote in elections.
+Hidden nodes replicate data.
+    Hidden nodes replicate data from the primary, although they are invisible to client applications.
+
+# incorrect, nope! any replica could be used geographically, could be used to critical or non-critical operations
+    and the use is for stores data 
+It serves to service reads and writes for people in the same geographic region as the host machine.
+It serves as a hidden secondary available to use for non-critical analysis operations.
+It serves as a reference to perform analytics on how data is changing over time.
+
+
+#################################################################################
+Question 6
+Given the following shard key:
+
+{ "country": 1, "_id": 1 }
+
+
+Which of the following queries will be routed (targeted)? 
+Remember that queries may be routed to more than one shard.
+
+# CORRECT 
+    it uses both sharded keys country and_id
+db.customers.find({"country": "Norway", "_id": 54})
+
+    it uses the first sharded key country
+db.customers.find({"country": { $gte: "Portugal", $lte: "Spain" }})
+
+    it uses both sharded keys country and_id, no matter the order
+db.customers.find({"_id": 914, "country": "Sweden"})
+
+
+# incorrect
+    there is no first sharded key country
+db.customers.find({"_id": 455})
+
+#################################################################################
+
+
+
