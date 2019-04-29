@@ -426,6 +426,8 @@ sh.addShard("m103-example/192.168.103.100:27013")
 ################################################################
 # checking status
 
+sh.status()
+
 --- Sharding Status --- 
   sharding version: {
   	"_id" : 1,
@@ -448,9 +450,133 @@ sh.addShard("m103-example/192.168.103.100:27013")
   databases:
         {  "_id" : "config",  "primary" : "config",  "partitioned" : true }
 
+################################################################
+# Config DB
+
+# connect to the mongos
+mongo --port 26000 --username m103-admin --password m103-pass --authenticationDatabase admin
+
+# Switch to config DB:
+use config
+
+# Query config.databases:
+db.databases.find().pretty()
+
+# Query config.collections:
+db.collections.find().pretty()
+
+# Query config.shards:
+db.shards.find().pretty()
+
+# Query config.chunks:
+db.chunks.find().pretty()
+
+# Query config.mongos:
+db.mongos.find().pretty()
+
+# RECAP
+- Config DB: shards, chunks, mongos
+- when to write data to Config DB: RARELY!
+
+################################################################
+# Shard keys
+
+# example
+{ x: 1 }
+Logical groups: 1 <= x < 3    3 <= x < 6  6 <= x < 9
+
+# SHARD KEY 
+
+- Shard key fields must be indexed
+  Indexes must exist FIRST before you can select the indexed fields for your shard key
+
+- Shard Keys are immutable
+  You cannot change the shard key fields post-sharding
+  You cannot change the values of the shard key fields post-sharding
+  
+- Shard Keys are permanent
+  You cannot unshard a sharded collection
+
+
+# Show collections in m103 database:
+use m103
+show collections
+
+# Enable sharding on the m103 database:
+sh.enableSharding("m103")
+
+# Find one document from the products collection, to help us choose a shard key:
+db.products.findOne()
+
+# Create an index on sku:
+db.products.createIndex( { "sku" : 1 } )
+
+# Shard the products collection on sku:
+sh.shardCollection("m103.products", {"sku" : 1 } )
+
+# Checking the status of the sharded cluster:
+sh.status()
+
+# RECAP
+- Shard keys determine data distribution in a sharded cluster
+- Shard keys are immutable
+- Shard key value are immutable
+- Create the underlying idex first before sharding on the indexed field or fields
+
+################################################################
+# Picking a Good Shard Keys
+
+# YOU SHARD COLLECTIONS, NOT databases
+
+
+# What makes a Good Shard Key?
+
+The goal is a shard key whose values provides good write distribution 
+- Cardinality
+- Frequency
+- Monotonic Change
+
+# Cardinality
+  High Cardinality = many possible unique shard key values
+
+# Frequency
+  Low Frequency = low repetition of a given unique shard key value
+
+# Type of Change, Avoid shard keys that change monotonically
+
+The goal is a shard key whose values provides good write distribution 
+- High Cardinality (lots of unique possible values)
+- Low Frequency (very little repetition of those unique values)
+- Non-Monotonically Changing (non-linear change in values)
+
+# Read Isolation 
+
+
+################################################################
+# Hashed Shard Keys
+
+{ x: 3 } ---> HashFunction(x) ---> data shard 
+
+Hashed Shard Key Considerations
+- Queries on ranges of shard key values are more likely to be scatter-gather
+- Cannot support geographically isolated read operations using zoned sharding
+- Hashed Index must be on a single non-array field
+- Hashed Indexes don't support fast sorting
+
+# Creating a hashed shard key
+1 - Use sh.enableSharding("<database>") to enable sharding for the specified database
+2 - Use db.collection.createIndex({ "<field>": "hashed" }) to create a index for your shard key fields
+3 - Use
+  sh.shardCollection(
+    "<database>.<collection>", { <shard key field> : "hashed" }
+  )
+  to shard the collection
+
+# RECAP
+- Even distribution of shard keys on monotonically changing fields like dates
+- No fast sorts, targeted queries on ranges of shard key values, or geographically isolated workloads
+- Hashed indexes are single field, non-array
 
 ################################################################
 
-mongo --host "m103-example/192.168.103.100:27011" -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
-mongo --host "192.168.103.100:27011" -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
 

@@ -1,0 +1,355 @@
+Lab - Configure a Sharded Cluster
+
+In this lab, you will turn your replica set into one shard in a sharded cluster. 
+To begin your sharded cluster configuration in MongoDB, you will need to do the following:
+
+1 - Bring up config servers
+2 - Bring up mongos
+3 - Enable sharding on m103-repl
+4- Add m103-repl as the primary shard in the cluster
+
+#########################################################
+#########################################################
+1. Bring up the config server replica set (CSRS)
+
+## PRIMARY
+# file csrs_1.conf 
+sharding:
+  clusterRole: configsvr
+replication:
+  replSetName: m103-csrs
+security:
+  keyFile: /var/mongodb/pki/m103-keyfile
+net:
+  bindIp: localhost,192.168.103.100
+  port: 26001
+systemLog:
+  destination: file
+  path: /var/mongodb/db/csrs1/mongod.log
+  logAppend: true
+processManagement:
+  fork: true
+storage:
+  dbPath: /var/mongodb/db/csrs1
+
+
+## SECONDARY
+# file csrs_2.conf 
+sharding:
+  clusterRole: configsvr
+replication:
+  replSetName: m103-csrs
+security:
+  keyFile: /var/mongodb/pki/m103-keyfile
+net:
+  bindIp: localhost,192.168.103.100
+  port: 26002
+systemLog:
+  destination: file
+  path: /var/mongodb/db/csrs2/mongod.log
+  logAppend: true
+processManagement:
+  fork: true
+storage:
+  dbPath: /var/mongodb/db/csrs2
+
+
+## SECONDARY
+# file csrs_3.conf 
+sharding:
+  clusterRole: configsvr
+replication:
+  replSetName: m103-csrs
+security:
+  keyFile: /var/mongodb/pki/m103-keyfile
+net:
+  bindIp: localhost,192.168.103.100
+  port: 26003
+systemLog:
+  destination: file
+  path: /var/mongodb/db/csrs3/mongod.log
+  logAppend: true
+processManagement:
+  fork: true
+storage:
+  dbPath: /var/mongodb/db/csrs3
+
+
+#########################################################
+# Creating db directories
+mkdir /var/mongodb/db/{csrs1,csrs2,csrs3}
+
+################################################################
+Starting the three config servers:
+
+mongod -f csrs_1.conf
+mongod -f csrs_2.conf
+mongod -f csrs_3.conf
+################################################################
+# Connect to one of the config servers
+mongo --port 26001
+
+################################################################
+# Initiating the CSRS:
+
+rs.initiate()
+
+################################################################
+# Creating super user on CSRS:
+use admin
+db.createUser({
+  user: "m103-admin",
+  pwd: "m103-pass",
+  roles: [
+    {role: "root", db: "admin"}
+  ]
+})
+
+################################################################
+# Authenticating as the super user:
+
+db.auth("m103-admin", "m103-pass")
+
+################################################################
+# Add the second and third node to the CSRS:
+
+rs.add("192.168.103.100:26002")
+rs.add("192.168.103.100:26003")
+
+#########################################################
+
+mongo --host "m103-csrs/192.168.103.100:26001" -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
+
+
+#########################################################
+#########################################################
+2. Bring up the mongos
+
+# Once the CSRS is running, you can start up the mongos process. 
+# Here is the config file for the mongos:
+
+# file mongos.conf
+sharding:
+  configDB: m103-csrs/192.168.103.100:26001
+security:
+  keyFile: /var/mongodb/pki/m103-keyfile
+net:
+  bindIp: localhost,192.168.103.100
+  port: 26000
+systemLog:
+  destination: file
+  path: /var/mongodb/db/mongos.log
+  logAppend: true
+processManagement:
+  fork: true
+
+
+################################################################
+# run mongos 
+
+mongos -f mongos.conf
+
+2019-04-29T03:03:55.857+0000 W SHARDING [main] Running a sharded cluster with fewer than 3 config servers should only be done for testing purposes and is not recommended for production.
+about to fork child process, waiting until server is ready for connections.
+forked process: 2134
+child process started successfully, parent exiting
+
+################################################################
+# Connect to mongos
+
+mongo --port 26000 --username m103-admin --password m103-pass --authenticationDatabase admin
+
+#########################################################
+sh.status()
+--- Sharding Status --- 
+  sharding version: {
+  	"_id" : 1,
+  	"minCompatibleVersion" : 5,
+  	"currentVersion" : 6,
+  	"clusterId" : ObjectId("5cc66873c6ac95dfa42022f7")
+  }
+  shards:
+  active mongoses:
+        "3.6.12" : 1
+  autosplit:
+        Currently enabled: yes
+  balancer:
+        Currently enabled:  yes
+        Currently running:  no
+        Failed balancer rounds in last 5 attempts:  0
+        Migration Results for the last 24 hours: 
+                No recent migrations
+  databases:
+        {  "_id" : "config",  "primary" : "config",  "partitioned" : true }
+
+#########################################################
+# run previous replicaset 
+ 
+cd ../labReplicaSetLocal/
+
+mongod -f mongod-repl-1.conf
+mongod -f mongod-repl-2.conf
+mongod -f mongod-repl-3.conf
+
+cd ../labShardedCluster/
+
+# turn off each seacondary node
+mongo --host "192.168.103.100:27001" -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
+use admin
+db.shutdownServer()
+
+# run new config
+mongod -f mongod-repl-1.conf
+
+mongo --host "192.168.103.100:27003" -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
+use admin
+db.shutdownServer()
+
+mongod -f mongod-repl-3.conf
+
+# in the primary...
+mongo --host "192.168.103.100:27001" -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
+rs.stepDown()
+
+use admin
+db.shutdownServer()
+
+mongod -f mongod-repl-2.conf
+
+################################################################
+# Connect to mongos
+
+mongo --port 26000 --username m103-admin --password m103-pass --authenticationDatabase admin
+
+sh.addShard("m103-repl/192.168.103.100:27003")
+{
+	"shardAdded" : "m103-repl",
+	"ok" : 1,
+	"operationTime" : Timestamp(1556507942, 9),
+	"$clusterTime" : {
+		"clusterTime" : Timestamp(1556507942, 9),
+		"signature" : {
+			"hash" : BinData(0,"vWWnxdurrW3O359Otq3f8KGAgC4="),
+			"keyId" : NumberLong("6685145540008607770")
+		}
+	}
+}
+
+#########################################################
+# Checking status
+
+sh.status()
+
+--- Sharding Status --- 
+  sharding version: {
+  	"_id" : 1,
+  	"minCompatibleVersion" : 5,
+  	"currentVersion" : 6,
+  	"clusterId" : ObjectId("5cc66873c6ac95dfa42022f7")
+  }
+  shards:
+        {  "_id" : "m103-repl",  "host" : "m103-repl/192.168.103.100:27001,192.168.103.100:27003,m103:27002",  "state" : 1 }
+  active mongoses:
+        "3.6.12" : 1
+  autosplit:
+        Currently enabled: yes
+  balancer:
+        Currently enabled:  yes
+        Currently running:  no
+        Failed balancer rounds in last 5 attempts:  0
+        Migration Results for the last 24 hours: 
+                No recent migrations
+  databases:
+        {  "_id" : "applicationData",  "primary" : "m103-repl",  "partitioned" : false }
+        {  "_id" : "config",  "primary" : "config",  "partitioned" : true }
+        {  "_id" : "m103",  "primary" : "m103-repl",  "partitioned" : false }
+        {  "_id" : "testDatabase",  "primary" : "m103-repl",  "partitioned" : false }
+
+#########################################################
+# file mongod-repl-1.conf 
+
+sharding:
+  clusterRole: shardsvr
+storage:
+  wiredTiger:
+     engineConfig:
+        cacheSizeGB: .1
+
+storage:
+  dbPath: /var/mongodb/db/1
+net:
+  bindIp: 192.168.103.100,localhost,m103.mongodb.university
+  port: 27001
+security:
+  authorization: enabled
+  keyFile: /var/mongodb/pki/m103-keyfile
+systemLog:
+  destination: file
+  path: /var/mongodb/db/mongod1.log
+  logAppend: true
+processManagement:
+  fork: true
+replication:
+  replSetName: m103-repl
+
+
+#########################################################
+# file mongod-repl-2.conf 
+
+sharding:
+  clusterRole: shardsvr
+storage:
+  wiredTiger:
+     engineConfig:
+        cacheSizeGB: .1
+
+storage:
+  dbPath: /var/mongodb/db/2
+net:
+  bindIp: 192.168.103.100,localhost,m103.mongodb.university
+  port: 27002
+security:
+  authorization: enabled
+  keyFile: /var/mongodb/pki/m103-keyfile
+systemLog:
+  destination: file
+  path: /var/mongodb/db/mongod2.log
+  logAppend: true
+processManagement:
+  fork: true
+replication:
+  replSetName: m103-repl
+
+
+
+#########################################################
+# file mongod-repl-3.conf 
+
+sharding:
+  clusterRole: shardsvr
+storage:
+  wiredTiger:
+     engineConfig:
+        cacheSizeGB: .1
+storage:
+  dbPath: /var/mongodb/db/3
+net:
+  bindIp: 192.168.103.100,localhost,m103.mongodb.university
+  port: 27003
+security:
+  authorization: enabled
+  keyFile: /var/mongodb/pki/m103-keyfile
+systemLog:
+  destination: file
+  path: /var/mongodb/db/mongod3.log
+  logAppend: true
+processManagement:
+  fork: true
+replication:
+  replSetName: m103-repl
+
+
+#########################################################
+# connecting to the sharding
+
+mongo --host "m103-repl/192.168.103.100:27001" -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
