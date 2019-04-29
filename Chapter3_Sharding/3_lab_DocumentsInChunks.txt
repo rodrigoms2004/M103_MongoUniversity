@@ -1,0 +1,186 @@
+Lab Prerequisites
+
+This lab assumes that the m103.products collection is sharded on sku. 
+If you sharded on name instead, you must reimport the dataset and shard it on sku. 
+Here are the instructions to do this:
+
+
+################################################################
+1. Drop the collection m103.products and reimport the dataset:
+
+mongoimport --drop /dataset/products.json --port 26000 -u "m103-admin" \
+-p "m103-pass" --authenticationDatabase "admin" \
+--db m103 --collection products
+
+################################################################
+# Connect to mongos
+
+mongo --port 26000 --username m103-admin --password m103-pass --authenticationDatabase admin
+
+################################################################
+2. Create an index on sku:
+
+use m103
+db.products.createIndex({"sku":1})
+{
+	"raw" : {
+		"m103-repl/192.168.103.100:27001,192.168.103.100:27003,m103:27002" : {
+			"createdCollectionAutomatically" : false,
+			"numIndexesBefore" : 1,
+			"numIndexesAfter" : 2,
+			"ok" : 1
+		}
+	},
+	"ok" : 1,
+	"operationTime" : Timestamp(1556553580, 1),
+	"$clusterTime" : {
+		"clusterTime" : Timestamp(1556553580, 1),
+		"signature" : {
+			"hash" : BinData(0,"4ldY6Yt9alZwUG7QDpk5ARWIyaE="),
+			"keyId" : NumberLong("6685145540008607770")
+		}
+	}
+}
+
+################################################################
+3. Enable sharding on m103 if not enabled:
+
+sh.enableSharding("m103")
+{
+	"ok" : 1,
+	"operationTime" : Timestamp(1556553595, 4),
+	"$clusterTime" : {
+		"clusterTime" : Timestamp(1556553595, 4),
+		"signature" : {
+			"hash" : BinData(0,"9cWRHGdSselWxCbBbxXsmlDKoL8="),
+			"keyId" : NumberLong("6685145540008607770")
+		}
+	}
+}
+
+################################################################
+4. Shard the collection on sku:
+
+db.adminCommand({shardCollection: "m103.products", key: {sku: 1}})
+{
+	"collectionsharded" : "m103.products",
+	"collectionUUID" : UUID("4bee5b6c-9ac7-4d26-b328-fb5b72c78ffb"),
+	"ok" : 1,
+	"operationTime" : Timestamp(1556553629, 11),
+	"$clusterTime" : {
+		"clusterTime" : Timestamp(1556553629, 11),
+		"signature" : {
+			"hash" : BinData(0,"cBex8x2jghSneEfv8BK32ChIXfk="),
+			"keyId" : NumberLong("6685145540008607770")
+		}
+	}
+}
+
+################################################################
+Once you've sharded your cluster on sku, any queries that use sku will be routed by mongos to the correct shards.
+
+################################################################
+In this lab, you are going to use the sharded cluster you created earlier 
+in this lesson and derive which chunk a given document resides.
+
+Connect to the mongos and authenticate as the m103-admin user you created in an earlier lab.
+
+Once connected, execute the following operation:
+
+db.getSiblingDB("m103").products.find({"sku" : 21572585 })
+
+{ "_id" : ObjectId("573f71c8f29313caab8ba50c"), "sku" : 21572585, "name" : "Star Trek: The Motion Picture/Star Trek II: The Wrath of Kahn (DVD)", "type" : "Movie", "regularPrice" : 12.99, "salePrice" : 12.99, "shippingWeight" : "0.25" }
+
+
+Locate the chunk that the specified document resides on and pass the full chunk ID 
+to the validation script provided in the handout. You need to run the validation 
+script in your vagrant and outside the mongo shell.
+
+hint sh.status() does not provide the chunk ID that you need to report for this lab. 
+Look in the config database for the collection that stores all chunk information. 
+Think in ranges - you want to find the chunk whose range is min <= key < max.
+
+################################################################
+db.chunks.find().pretty()
+...
+{
+	"_id" : "m103.products-sku_MinKey",
+	"lastmod" : Timestamp(2, 0),
+	"lastmodEpoch" : ObjectId("5cc71f9d1c13b4765593394c"),
+	"ns" : "m103.products",
+	"min" : {
+		"sku" : { "$minKey" : 1 }
+	},
+	"max" : {
+		"sku" : 23153496
+	},
+	"shard" : "m103-repl-2"
+}
+...
+
+validate_lab_document_chunks m103.products-sku_MinKey
+
+################################################################
+# ANSWER given by University
+
+
+First, connect to the mongos as the m103-admin user:
+mongo -u m103-admin -p mypass123 --authenticationDatabase admin --port 26000
+
+Use sh.status() to confirm that the products collection is sharded on sku.
+Because the values of our shard key are normal integers, it is possible to visually 
+identify which chunk our document belongs in. However, sh.status() does not provide the chunk ID necessary.
+
+Query the config.chunks collection to identify which chunk contains the document in question. 
+First, ensure you are filtering only those chunks belonging to the m103.products namespace:
+
+db.getSiblingDB("config").chunks.find(
+  {
+    "ns" : "m103.products"
+  }
+)
+{ "_id" : "m103.products-sku_28928914", "ns" : "m103.products", "min" : { "sku" : 28928914 }, "max" : { "sku" : { "$maxKey" : 1 } }, "shard" : "m103-repl", "lastmod" : Timestamp(1, 2), "lastmodEpoch" : ObjectId("5cc71f9d1c13b4765593394c") }
+{ "_id" : "m103.products-sku_MinKey", "lastmod" : Timestamp(2, 0), "lastmodEpoch" : ObjectId("5cc71f9d1c13b4765593394c"), "ns" : "m103.products", "min" : { "sku" : { "$minKey" : 1 } }, "max" : { "sku" : 23153496 }, "shard" : "m103-repl-2" }
+{ "_id" : "m103.products-sku_23153496", "lastmod" : Timestamp(2, 1), "lastmodEpoch" : ObjectId("5cc71f9d1c13b4765593394c"), "ns" : "m103.products", "min" : { "sku" : 23153496 }, "max" : { "sku" : 28928914 }, "shard" : "m103-repl" }
+
+The result of this query is all chunks associated to the sharded products collection. 
+We can visually identify which chunk our document belongs in by looking at the min.sku and max.sku fields, 
+which define the inclusive minimum and exclusive maximum range of shard key values that are associated to the chunk.
+
+However, for larger datasets, there may be many hundreds or thousands of chunks, making visual identification time 
+consuming or unrealistic. Instead, we can perform a query against the config.chunks database to identify the chunk where min <= sku < max
+
+
+db.getSiblingDB("config").chunks.find(
+   {
+      "ns" : "m103.products",
+      $expr: {
+         $and : [
+          {$gte : [ 21572585, "$min.sku"]},
+          {$lt : [21572585, "$max.sku"]}
+         ]
+      }
+   }
+)
+
+{ "_id" : "m103.products-sku_MinKey", "lastmod" : Timestamp(2, 0), "lastmodEpoch" : ObjectId("5cc71f9d1c13b4765593394c"), "ns" : "m103.products", "min" : { "sku" : { "$minKey" : 1 } }, "max" : { "sku" : 23153496 }, "shard" : "m103-repl-2" }
+
+
+$expr allows us to use aggregation operators and syntax in normal queries. 
+Without $expr, we would not be able to use the $min.sku and $max.sku variable 
+expressions to represent the value of min or max for any given product. 
+The query returns the single chunk where the document resides:
+
+{
+	"_id" : "m103.products-sku_MinKey",
+	"lastmod" : Timestamp(2, 0),
+	"lastmodEpoch" : ObjectId("5cc71f9d1c13b4765593394c"),
+	"ns" : "m103.products",
+	"min" : {
+		"sku" : { "$minKey" : 1 }
+	},
+	"max" : {
+		"sku" : 23153496
+	},
+	"shard" : "m103-repl-2"
+}

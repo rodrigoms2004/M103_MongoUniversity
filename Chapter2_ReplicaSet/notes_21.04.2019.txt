@@ -810,7 +810,7 @@ new_collection
 SECONDARY> db.new_collection.find()
 { "_id" : ObjectId("5cbe252c07179a48d0f4d5e1"), "student" : "Matt Javaly", "grade" : "A+" }
 
-# Attempting to write data directly to a secondary node (this should fail, becouse we cannot write data directly to a secondary):
+# Attempting to write data directly to a secondary node (this should fail, because we cannot write data directly to a secondary):
 db.new_collection.insert( { "student": "Norberto Leite", "grade": "B+" } )
     SECONDARY> db.new_collection.insert( { "student": "Norberto Leite", "grade": "B+" } )
     WriteResult({ "writeError" : { "code" : 10107, "errmsg" : "not master" } })
@@ -840,7 +840,7 @@ PRIMARY> rs.status()
 # shutting down another node
 mongo --host "m103.mongodb.university:27013" -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
 
-# NOW with only one node the command below will not work, becouse there is not a replica set any more
+# NOW with only one node the command below will not work, because there is not a replica set any more
 mongo --host "m103-example/m103.mongodb.university:27011" -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
 
 2019-04-22T20:52:40.716+0000 I NETWORK  [thread1] Starting new replica set monitor for m103-example/m103.mongodb.university:27011
@@ -864,7 +864,7 @@ mongo --host "m103-example/m103.mongodb.university:27011" -u "m103-admin" -p "m1
 mongo --host "m103.mongodb.university:27011" -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
 SECONDARY> 
 
-# secondary node, so is not possible to write anything in the replica set becouse there is no primary
+# secondary node, so is not possible to write anything in the replica set because there is no primary
 SECONDARY> rs.isMaster()
 {
 	"hosts" : [
@@ -943,7 +943,7 @@ rs.isMaster()
 ...
 
 IN A THREE NODE REPLICA SET A MAJORITY IS TWO NODES, IF TWO NODES ARE DOWN THE SURVIVOR WILL BECAME A SECONDARY
-BECOUSE IN THIS CASE IS 1 VS 2
+because IN THIS CASE IS 1 VS 2
 
 
 #####################################################

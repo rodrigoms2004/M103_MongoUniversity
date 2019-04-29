@@ -1,0 +1,512 @@
+################################################################
+# Run cluster
+
+ mongod -f csrs_1.conf 
+ mongod -f csrs_2.conf 
+ mongod -f csrs_3.conf 
+ mongos -f mongos.conf 
+ mongod -f mongod-repl-1.conf 
+ mongod -f mongod-repl-2.conf 
+ mongod -f mongod-repl-3.conf 
+
+mongo --host "m103-csrs/192.168.103.100:26001" -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
+mongo --host "m103-repl/192.168.103.100:27001" -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
+
+mongo --port 26000 --username m103-admin --password m103-pass --authenticationDatabase admin
+
+mongo --host "m103-repl-2/192.168.103.100:27004" -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
+
+
+
+################################################################
+# check status
+sh.status()
+--- Sharding Status --- 
+  sharding version: {
+  	"_id" : 1,
+  	"minCompatibleVersion" : 5,
+  	"currentVersion" : 6,
+  	"clusterId" : ObjectId("5cc66873c6ac95dfa42022f7")
+  }
+  shards:
+        {  "_id" : "m103-repl",  "host" : "m103-repl/192.168.103.100:27001,192.168.103.100:27003,m103:27002",  "state" : 1 }
+  active mongoses:
+        "3.6.12" : 1
+  autosplit:
+        Currently enabled: yes
+  balancer:
+        Currently enabled:  yes
+        Currently running:  no
+        Failed balancer rounds in last 5 attempts:  1
+        Last reported error:  Could not find host matching read preference { mode: "primary" } for set m103-repl
+        Time of Reported error:  Mon Apr 29 2019 12:16:57 GMT+0000 (UTC)
+        Migration Results for the last 24 hours: 
+                No recent migrations
+  databases:
+        {  "_id" : "applicationData",  "primary" : "m103-repl",  "partitioned" : false }
+        {  "_id" : "config",  "primary" : "config",  "partitioned" : true }
+                config.system.sessions
+                        shard key: { "_id" : 1 }
+                        unique: false
+                        balancing: true
+                        chunks:
+                                m103-repl	1
+                        { "_id" : { "$minKey" : 1 } } -->> { "_id" : { "$maxKey" : 1 } } on : m103-repl Timestamp(1, 0) 
+        {  "_id" : "m103",  "primary" : "m103-repl",  "partitioned" : false }
+        {  "_id" : "testDatabase",  "primary" : "m103-repl",  "partitioned" : false }
+
+
+
+################################################################
+# Connect to mongos
+
+mongo --port 26000 --username m103-admin --password m103-pass --authenticationDatabase admin
+
+
+################################################################
+
+# At this point, your cluster is now configured for sharding. 
+# You should already have a CSRS, mongos, and primary shard.
+
+# In this lab, you will do the following with your cluster:
+
+1 - Add a second shard
+2 - Import a dataset onto your primary shard
+3 - Choose a shard key and shard your collection
+
+
+
+################################################################
+################################################################
+################################################################
+1- Adding a Second shard
+
+# Your second shard m103-repl-2 will be a three-node replica set, just like your primary shard.
+# You can create the data paths for each node in m103-repl-2 with the following command:
+
+mkdir /var/mongodb/db/{4,5,6}
+
+################################################################
+# Node 4, file mongod-repl-4.conf
+
+storage:
+  dbPath: /var/mongodb/db/4
+  wiredTiger:
+     engineConfig:
+        cacheSizeGB: .1
+net:
+  bindIp: 192.168.103.100,localhost
+  port: 27004
+security:
+  keyFile: /var/mongodb/pki/m103-keyfile
+systemLog:
+  destination: file
+  path: /var/mongodb/db/4/mongod.log
+  logAppend: true
+processManagement:
+  fork: true
+operationProfiling:
+  slowOpThresholdMs: 50
+replication:
+  replSetName: m103-repl-2
+sharding:
+  clusterRole: shardsvr
+
+################################################################
+# Node 5, file mongod-repl-5.conf
+
+storage:
+  dbPath: /var/mongodb/db/5
+  wiredTiger:
+     engineConfig:
+        cacheSizeGB: .1
+net:
+  bindIp: 192.168.103.100,localhost
+  port: 27005
+security:
+  keyFile: /var/mongodb/pki/m103-keyfile
+systemLog:
+  destination: file
+  path: /var/mongodb/db/5/mongod.log
+  logAppend: true
+processManagement:
+  fork: true
+operationProfiling:
+  slowOpThresholdMs: 50
+replication:
+  replSetName: m103-repl-2
+sharding:
+  clusterRole: shardsvr
+
+################################################################
+# Node 6, file mongod-repl-6.conf
+
+storage:
+  dbPath: /var/mongodb/db/6
+  wiredTiger:
+     engineConfig:
+        cacheSizeGB: .1
+net:
+  bindIp: 192.168.103.100,localhost
+  port: 27006
+security:
+  keyFile: /var/mongodb/pki/m103-keyfile
+systemLog:
+  destination: file
+  path: /var/mongodb/db/6/mongod.log
+  logAppend: true
+processManagement:
+  fork: true
+operationProfiling:
+  slowOpThresholdMs: 50
+replication:
+  replSetName: m103-repl-2
+sharding:
+  clusterRole: shardsvr
+
+################################################################
+# We can now initialize m103-repl-2 as a normal replica set
+
+# run server 4
+mongod -f mongod-repl-4.conf 
+
+# connect in port
+mongo --port 27004
+
+# initiate it
+MongoDB Enterprise > rs.initiate()
+{
+	"info2" : "no configuration specified. Using a default configuration for the set",
+	"me" : "192.168.103.100:27004",
+	"ok" : 1
+}
+
+# create admin user
+use admin
+db.createUser({
+  user: "m103-admin",
+  pwd: "m103-pass",
+  roles: [
+    {role: "root", db: "admin"}
+  ]
+})
+
+
+
+# run the other servers
+mongod -f mongod-repl-5.conf 
+mongod -f mongod-repl-6.conf 
+
+# connect using admin user
+mongo --host "m103-repl-2/192.168.103.100:27004" -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
+
+
+# add the other servers
+rs.add("192.168.103.100:27005")
+rs.add("192.168.103.100:27006")
+
+
+# check replicaset
+
+rs.isMaster()
+{
+	"hosts" : [
+		"192.168.103.100:27004",
+		"192.168.103.100:27005",
+		"192.168.103.100:27006"
+	],
+	"setName" : "m103-repl-2",
+	"setVersion" : 3,
+	"ismaster" : true,
+	"secondary" : false,
+	"primary" : "192.168.103.100:27004",
+	"me" : "192.168.103.100:27004",
+...
+
+################################################################
+# Connect to mongos
+
+mongo --port 26000 --username m103-admin --password m103-pass --authenticationDatabase admin
+
+
+################################################################
+# Now exit the mongo shell and connect to mongos. 
+# We can add m103-repl-2 as a shard with the following command:
+
+sh.addShard("m103-repl-2/192.168.103.100:27004")
+
+{
+	"shardAdded" : "m103-repl-2",
+	"ok" : 1,
+	"operationTime" : Timestamp(1556541965, 7),
+	"$clusterTime" : {
+		"clusterTime" : Timestamp(1556541965, 7),
+		"signature" : {
+			"hash" : BinData(0,"66odNiPGw4KyOoSD+ItS1vJingQ="),
+			"keyId" : NumberLong("6685145540008607770")
+		}
+	}
+}
+
+################################################################
+# Check status
+
+sh.status()
+--- Sharding Status --- 
+  sharding version: {
+  	"_id" : 1,
+  	"minCompatibleVersion" : 5,
+  	"currentVersion" : 6,
+  	"clusterId" : ObjectId("5cc66873c6ac95dfa42022f7")
+  }
+  shards:
+        {  "_id" : "m103-repl",  "host" : "m103-repl/192.168.103.100:27001,192.168.103.100:27003,m103:27002",  "state" : 1 }
+        {  "_id" : "m103-repl-2",  "host" : "m103-repl-2/192.168.103.100:27004,192.168.103.100:27005,192.168.103.100:27006",  "state" : 1 }
+  active mongoses:
+        "3.6.12" : 1
+  autosplit:
+        Currently enabled: yes
+  balancer:
+        Currently enabled:  yes
+        Currently running:  no
+        Failed balancer rounds in last 5 attempts:  1
+        Last reported error:  Could not find host matching read preference { mode: "primary" } for set m103-repl
+        Time of Reported error:  Mon Apr 29 2019 12:16:57 GMT+0000 (UTC)
+        Migration Results for the last 24 hours: 
+                No recent migrations
+  databases:
+        {  "_id" : "applicationData",  "primary" : "m103-repl",  "partitioned" : false }
+        {  "_id" : "config",  "primary" : "config",  "partitioned" : true }
+                config.system.sessions
+                        shard key: { "_id" : 1 }
+                        unique: false
+                        balancing: true
+                        chunks:
+                                m103-repl	1
+                        { "_id" : { "$minKey" : 1 } } -->> { "_id" : { "$maxKey" : 1 } } on : m103-repl Timestamp(1, 0) 
+        {  "_id" : "m103",  "primary" : "m103-repl",  "partitioned" : false }
+        {  "_id" : "testDatabase",  "primary" : "m103-repl",  "partitioned" : false }
+
+
+
+################################################################
+################################################################
+################################################################
+2 - Importing Data onto the Primary Shard
+
+mongoimport --drop /dataset/products.json --port 26000 -u "m103-admin" \
+-p "m103-pass" --authenticationDatabase "admin" \
+--db m103 --collection products
+
+
+################################################################
+# Checking 
+use m103
+db.products.count()
+516784
+
+
+
+
+################################################################
+################################################################
+################################################################
+3 -  Sharding the Collection
+
+
+# Before you can shard your new products collection, you must enable sharding on the m103 database:
+
+sh.enableSharding("m103")
+
+{
+	"ok" : 1,
+	"operationTime" : Timestamp(1556550061, 5),
+	"$clusterTime" : {
+		"clusterTime" : Timestamp(1556550061, 5),
+		"signature" : {
+			"hash" : BinData(0,"LXcP5g5e931MPBlKJIl0VzBu8+k="),
+			"keyId" : NumberLong("6685145540008607770")
+		}
+	}
+}
+
+
+# Once you've done this, it's time to choose a shard key on a single field in the products collection. 
+# To do this, you should review the qualities of a good shard key in the docs and the following information 
+# about the products collection:
+
+_id is a serial number for each product in this collection, 
+    rarely used in queries but important for internal MongoDB usage
+
+sku (Stock Keeping Unit) is a randomly generated integer unique to each product 
+    - this is commonly used to refer to specific products when updating stock quantities
+
+name is the name of the product as it appears in the store and on the website
+
+type is the type of product, with the possible values "Bundle", "Movie", "Music" and "Software"
+
+regularPrice is the regular price of the product, when there is no sale - this price changes every season
+
+salePrice is the price of a product during a sale - this price changes arbitrarily based on when sales occur
+
+shippingWeight is the weight of the product in kilograms, ranging between 0.01 and 1.00 - 
+    this value is not known for every product in the collection
+
+################################################################
+# Once you've chosen a shard key, you must create an index on the shard key field:
+
+db.products.createIndex({"<shard_key>": 1})
+
+# choosen field: name
+db.products.createIndex({"name": 1})
+{
+	"raw" : {
+		"m103-repl/192.168.103.100:27001,192.168.103.100:27003,m103:27002" : {
+			"createdCollectionAutomatically" : false,
+			"numIndexesBefore" : 1,
+			"numIndexesAfter" : 2,
+			"ok" : 1
+		}
+	},
+	"ok" : 1,
+	"operationTime" : Timestamp(1556550079, 1),
+	"$clusterTime" : {
+		"clusterTime" : Timestamp(1556550079, 1),
+		"signature" : {
+			"hash" : BinData(0,"y1rV+TW1KTauAo2WgRVI8pz53lI="),
+			"keyId" : NumberLong("6685145540008607770")
+		}
+	}
+}
+
+
+
+################################################################
+# Once the index is created, shard the collection with the following command:
+
+db.adminCommand( { shardCollection: "m103.products", key: { "name": 1 } } )
+{
+	"collectionsharded" : "m103.products",
+	"collectionUUID" : UUID("460a0748-d4f3-4cc7-9ed0-5a3352f4830e"),
+	"ok" : 1,
+	"operationTime" : Timestamp(1556550087, 11),
+	"$clusterTime" : {
+		"clusterTime" : Timestamp(1556550087, 11),
+		"signature" : {
+			"hash" : BinData(0,"MqgAurRq63SImoZColH6DCHc0Y0="),
+			"keyId" : NumberLong("6685145540008607770")
+		}
+	}
+}
+
+
+
+################################################################
+ANSWERS
+
+1. Adding a Second Shard
+
+Once m103-repl-2 is up and running, we exit the mongo shell and connect to mongos. We can add our new shard with the following command:
+
+sh.addShard("m103-repl-2/192.168.103.100:27004")
+The output of sh.status() should look something like this:
+
+shards:
+  {  "_id" : "m103-repl",  "host" : "m103-repl/192.168.103.100:27001,192.168.103.100:27002,192.168.103.100:27003",  "state" : 1 }
+  {  "_id" : "m103-repl-2",  "host" : "m103-repl-2/192.168.103.100:27004,192.168.103.100:27005,192.168.103.100:27006",  "state" : 1 }
+
+
+
+################################################################
+2. Importing Data onto the Primary Shard
+
+Importing data into a sharded cluster is always done with the mongos. We can import our dataset into m103.products with the following command:
+
+mongoimport /dataset/products.json --port 26000 -u "m103-admin" \
+-p "m103-pass" --authenticationDatabase "admin" \
+--db m103 --collection products
+We can verify that the entire dataset was imported with count():
+
+use m103
+db.products.count()
+This should return 516784.
+
+################################################################
+3. Sharding the Collection
+
+We can look at all potential shard keys with findOne():
+
+use m103
+db.products.findOne()
+The output of this command should give us something like this:
+
+{
+    "_id" : ObjectId("573f706ff29313caab7d7395"),
+    "sku" : 1000000749,
+    "name" : "Gods And Heroes: Rome Rising - Windows [Digital Download]",
+    "type" : "Software",
+    "regularPrice" : 39.95,
+    "salePrice" : 39.95,
+    "shippingWeight" : "0.01"
+}
+
+
+
+A trick to determining the correct shard key is process of elimination. 
+We can rule out the potential shard keys which don't follow the rules of cardinality, 
+frequency, rate of change, and query patterns.
+
+We can rule out _id because it is rarely used in queries, and we would therefore be wasting an index by sharding on it. 
+In addition, it is monotonically increasing, so it will continue to increase forever and cause hotspotting in our cluster.
+
+We can rule out type because this field does not have high cardinality. In fact, it only has four possible values
+ - we can see this by running the following command on m103.products:
+
+db.products.distinct("type")
+[ "Bundle", "Movie", "Music", "Software" ]
+
+
+We can rule out regularPrice and salePrice because they are both subject to change and the shard key is immutable. 
+If we sharded on one of these fields, any future updates to that field would result in an error.
+
+We can rule out shippingWeight because every document in the collection must have the shard key, 
+and not every document here has a shippingWeight.
+
+From this, we have only two good shard keys:
+
+- name
+- sku
+
+
+Both of these fields have high cardinality, low frequency and non-monotonically increasing values. They are also commonly used in queries.
+
+The validation script will accept either solution.
+
+Before we can shard, we must enable sharding on the m103 database:
+sh.enableSharding("m103")
+
+Then, we must create an index on the shard key (in this example, name):
+db.products.createIndex({"name": 1})
+
+To shard on name, we specify the collection:
+db.adminCommand( { shardCollection: "m103.products", key: { name: 1 } } )
+
+################################################################
+Choosing the Correct Shard Key
+
+To choose a different shard key, the collection must be dropped and the dataset must be reimported.
+
+From the mongos shell, we can drop the products collection with the following command:
+
+use m103
+db.products.drop()
+
+
+Now we exit the mongos shell and reimport the dataset:
+
+mongoimport /dataset/products.json --port 26000 -u "m103-admin" \
+-p "m103-pass" --authenticationDatabase "admin" \
+--db m103 --collection products
+
+Now we can shard the collection again, because the dataset gets imported onto the primary shard.
+

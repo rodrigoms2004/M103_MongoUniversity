@@ -578,5 +578,386 @@ Hashed Shard Key Considerations
 - Hashed indexes are single field, non-array
 
 ################################################################
+# CHUNKS
+
+ChunkSize = default 64MB
+
+1MB <= ChunkSize <= 1024MB
+
+ChunkSize is configurable in runtime
+
+MinKey ------- Key Space ------- MasKey
 
 
+Jumbo Chunks
+
+- Larger than the defined chunk size
+- Cannot move jumbo chunks
+  - Once marked as jumbo the balancer skips these
+    chunks and avoids trying to move them
+- In some cases these will not be able to be split
+
+
+
+################################################################
+Show collections in config database:
+use config
+show collections
+
+Find one document from the chunks collection:
+db.chunks.findOne()
+{
+	"_id" : "config.system.sessions-_id_MinKey",
+	"ns" : "config.system.sessions",
+	"min" : {
+		"_id" : { "$minKey" : 1 }
+	},
+	"max" : {
+		"_id" : { "$maxKey" : 1 }
+	},
+	"shard" : "m103-repl",
+	"lastmod" : Timestamp(1, 0),
+	"lastmodEpoch" : ObjectId("5cc66e3cc6ac95dfa4203745")
+}
+
+Change the chunk size:
+use config
+db.settings.save({_id: "chunksize", value: 2})
+
+Check the status of the sharded cluster:
+sh.status()
+...
+databases:
+...
+        {  "_id" : "m103",  "primary" : "m103-repl",  "partitioned" : true }
+                m103.products
+                        shard key: { "name" : 1 }
+                        unique: false
+                        balancing: true
+                        chunks:
+                                m103-repl	2
+                                m103-repl-2	1
+                        { "name" : { "$minKey" : 1 } } -->> { "name" : "In Meiner Mitte - CD" } on : m103-repl-2 Timestamp(2, 0) 
+                        { "name" : "In Meiner Mitte - CD" } -->> { "name" : "Tha Shiznit: Episode 1 - CD" } on : m103-repl Timestamp(2, 1) 
+                        { "name" : "Tha Shiznit: Episode 1 - CD" } -->> { "name" : { "$maxKey" : 1 } } on : m103-repl Timestamp(1, 2) 
+
+
+
+
+Download the attached handout products.part2.json and copy this file to your Vagrant shared folder:
+cp ~/Downloads/products.part2.json m103-vagrant-env/shared/.
+
+Import a new dataset (note that this dataset does not exist on the course VM):
+mongoimport -d m103 -c products /shared/products.part2.json
+
+
+#RECAP
+
+- Logical groups of documents
+- Chunk can only live at one designated shard at a time
+- Shard key cardinality/Frequency, chunk size wil determine number of chunks
+
+
+################################################################
+
+# Correct answers:
+
+Chunk ranges have an inclusive minimum and an exclusive maximum.
+  This is how chunk ranges are defined in MongoDB.
+
+Increasing the maximum chunk size can help eliminate jumbo chunks.
+  By definition, jumbo chunks are larger than the maximum chunk size, so raising the max chunk size can get rid of them.
+
+# Incorrect answers:
+
+Chunk ranges can never change once they are set.
+  The cluster may split chunks once they become too big.
+
+Documents in the same chunk may live on different shards.
+  Individual chunks always remain on the same shard.
+
+Jumbo chunks can be migrated between shards.
+  Jumbo chunks cannot be migrated to another shard, which is part of the reason why they are so problematic.
+
+
+################################################################
+# BALANCING
+
+Mongodb identify if a shard has much chunks and automaticaly move shunks across shards
+
+Balancer process run in config servers, it could migrate chunks in parallel 
+
+A given shard cannot participate of more than one migration at time
+in 'n' shards divide it by two and you get the number of chunks that can be migrate in a Balacer Round
+
+For instance in a topology with 3 shards, we can migrate 1 chunk at time (3 / 2 ~ 1)
+
+The Balancer Rounds occour in sequence until all chunks are balanced and cluster is evenly distributed as possible
+
+Beyound Mongos, balancer could split chunks if necessary
+
+
+################################################################
+Lecture Instructions
+# https://docs.mongodb.com/manual/tutorial/manage-sharded-cluster-balancer/#sharding-schedule-balancing-window
+
+Start the balancer:
+sh.startBalancer(timeout, interval)
+
+Stop the balancer:
+sh.stopBalancer(timeout, interval)
+
+Enable/disable the balancer:
+sh.setBalancerState(boolean)
+
+#RECAP
+- Balancer responsible for evenly distribuiting chunks across the sharded cluster
+- Balancer runs on Primary member of config server replica set
+- Balancer is an automatic process and requires minimal user configuration 
+
+
+################################################################
+Queries in a Sharded Cluster
+
+
+https://docs.mongodb.com/manual/core/aggregation-pipeline-sharded-collections/
+
+You can read more about routing Aggregation queries in a sharded cluster on the MongoDB sharding docs.
+
+At 2:17, we describe how limit() and skip() are handled in a sharded cluster. There is a specific case not mentioned.
+
+When used in conjunction with a limit(), the mongos will pass the limit plus the value of the skip() 
+to the shards to ensure a sufficient number of documents are returned to the mongos to apply 
+the final limit() and skip() successfully.
+
+Sort, Limit, and Skip in sharded clusters
+
+sort()
+  The mongos pushes the sort to each shard and merge-sorts the results
+
+limit()
+  The mongos passes the limit to each targeted shard, then re-applies the limit to the merged set of results
+
+skip()
+  The mongos performs the skip against the merged set of results
+
+# RECAP
+- mongos handles all queries in the cluster
+- mongos builds a list of shards to target a Query
+- mongos merges the results from each shard
+- mongos supports standard query modifiers like sort, limit, and skip
+
+################################################################
+Routed Queries vs Scatter Gather: Part 1
+
+Compound shard key: { "sku": 1, "type": 1, "name": 1 }
+
+
+Targetable query, can use any of these below:
+db.products.find( { "sku" : ... } )
+db.products.find( { "sku" : ..., "type" : ... } )
+db.products.find( { "sku" : ..., "type" : ..., "name" : ... } )
+
+Scatter-gather queries, you can't perform targetable query, becaouse is not included
+the full prefix leading up to either of these fields 
+db.products.find( { "type" : ... } )
+db.products.find( { "name" : ... } )
+
+
+
+################################################################
+Routed Queries vs Scatter Gather: Part 2
+
+use m103
+show collections
+
+Routed query with explain() output:
+db.products.find({"sku" : 1000000749 }).explain()
+{
+	"queryPlanner" : {
+		"mongosPlannerVersion" : 1,
+		"winningPlan" : {
+			"stage" : "SINGLE_SHARD",             # SINGLE SHARD!!!!!
+			"shards" : [
+				{
+					"shardName" : "m103-repl",        # SINGLE SHARD!!!!!
+					"connectionString" : "m103-repl/192.168.103.100:27001,192.168.103.100:27003,m103:27002",
+					"serverInfo" : {
+						"host" : "m103",
+						"port" : 27001,
+						"version" : "3.6.12",
+						"gitVersion" : "c2b9acad0248ca06b14ef1640734b5d0595b55f1"
+					},
+					"plannerVersion" : 1,
+					"namespace" : "m103.products",
+					"indexFilterSet" : false,
+					"parsedQuery" : {
+						"sku" : {
+							"$eq" : 1000000749
+						}
+					},
+					"winningPlan" : {
+						"stage" : "FETCH",
+						"inputStage" : {
+							"stage" : "SHARDING_FILTER",  # SINGLE SHARD!!!!!
+							"inputStage" : {
+								"stage" : "IXSCAN",
+								"keyPattern" : {
+									"sku" : 1
+								},
+								"indexName" : "sku_1",
+								"isMultiKey" : false,
+								"multiKeyPaths" : {
+									"sku" : [ ]
+								},
+								"isUnique" : false,
+								"isSparse" : false,
+								"isPartial" : false,
+								"indexVersion" : 2,
+								"direction" : "forward",
+								"indexBounds" : {
+									"sku" : [
+										"[1000000749.0, 1000000749.0]"
+									]
+								}
+							}
+						}
+					},
+					"rejectedPlans" : [ ]
+				}
+			]
+		}
+	},
+	"ok" : 1,
+	"operationTime" : Timestamp(1556556382, 1),
+	"$clusterTime" : {
+		"clusterTime" : Timestamp(1556556383, 1),
+		"signature" : {
+			"hash" : BinData(0,"3QdgEI+hSQhp3FhVNpsB2XxFDqo="),
+			"keyId" : NumberLong("6685145540008607770")
+		}
+	}
+}
+
+################################################################
+Scatter gather query with explain() output:
+db.products.find( {
+  "name" : "Gods And Heroes: Rome Rising - Windows [Digital Download]" }
+).explain()
+{
+	"queryPlanner" : {
+		"mongosPlannerVersion" : 1,
+		"winningPlan" : {
+			"stage" : "SHARD_MERGE",          # MERGED SHARD!!!!!
+			"shards" : [
+				{
+					"shardName" : "m103-repl",    # SHARD ONE!!!!!
+					"connectionString" : "m103-repl/192.168.103.100:27001,192.168.103.100:27003,m103:27002",
+					"serverInfo" : {
+						"host" : "m103",
+						"port" : 27001,
+						"version" : "3.6.12",
+						"gitVersion" : "c2b9acad0248ca06b14ef1640734b5d0595b55f1"
+					},
+					"plannerVersion" : 1,
+					"namespace" : "m103.products",
+					"indexFilterSet" : false,
+					"parsedQuery" : {
+						"name" : {
+							"$eq" : "Gods And Heroes: Rome Rising - Windows [Digital Download]"
+						}
+					},
+					"winningPlan" : {
+						"stage" : "SHARDING_FILTER",
+						"inputStage" : {
+							"stage" : "COLLSCAN",
+							"filter" : {
+								"name" : {
+									"$eq" : "Gods And Heroes: Rome Rising - Windows [Digital Download]"
+								}
+							},
+							"direction" : "forward"
+						}
+					},
+					"rejectedPlans" : [ ]
+				},
+				{
+					"shardName" : "m103-repl-2",  # SHARD TWO!!!!!
+					"connectionString" : "m103-repl-2/192.168.103.100:27004,192.168.103.100:27005,192.168.103.100:27006",
+					"serverInfo" : {
+						"host" : "m103",
+						"port" : 27004,
+						"version" : "3.6.12",
+						"gitVersion" : "c2b9acad0248ca06b14ef1640734b5d0595b55f1"
+					},
+					"plannerVersion" : 1,
+					"namespace" : "m103.products",
+					"indexFilterSet" : false,
+					"parsedQuery" : {
+						"name" : {
+							"$eq" : "Gods And Heroes: Rome Rising - Windows [Digital Download]"
+						}
+					},
+					"winningPlan" : {
+						"stage" : "SHARDING_FILTER",
+						"inputStage" : {
+							"stage" : "COLLSCAN",
+							"filter" : {
+								"name" : {
+									"$eq" : "Gods And Heroes: Rome Rising - Windows [Digital Download]"
+								}
+							},
+							"direction" : "forward"
+						}
+					},
+					"rejectedPlans" : [ ]
+				}
+			]
+		}
+	},
+	"ok" : 1,
+	"operationTime" : Timestamp(1556556418, 1),
+	"$clusterTime" : {
+		"clusterTime" : Timestamp(1556556418, 1),
+		"signature" : {
+			"hash" : BinData(0,"5qs0Nr9ZQylBZv/AKHLF9boqhcs="),
+			"keyId" : NumberLong("6685145540008607770")
+		}
+	}
+}
+
+################################################################
+both queries return the same document, but first one is faster
+
+db.products.find({"sku" : 1000000749 }).pretty()
+{
+	"_id" : ObjectId("573f706ff29313caab7d7395"),
+	"sku" : 1000000749,
+	"name" : "Gods And Heroes: Rome Rising - Windows [Digital Download]",
+	"type" : "Software",
+	"regularPrice" : 39.95,
+	"salePrice" : 39.95,
+	"shippingWeight" : "0.01"
+}
+
+db.products.find( {   "name" : "Gods And Heroes: Rome Rising - Windows [Digital Download]" } ).pretty()
+{
+	"_id" : ObjectId("573f706ff29313caab7d7395"),
+	"sku" : 1000000749,
+	"name" : "Gods And Heroes: Rome Rising - Windows [Digital Download]",
+	"type" : "Software",
+	"regularPrice" : 39.95,
+	"salePrice" : 39.95,
+	"shippingWeight" : "0.01"
+}
+
+
+################################################################
+#RECAP
+
+- Targeted queries require the shard key in the query
+- Ranged queries on the shard key may still require targeting every shard in the cluster
+- Without the sharded key, the mongos must perform a scatter-gather query
+
+
+################################################################

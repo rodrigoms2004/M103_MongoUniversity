@@ -1,0 +1,402 @@
+This lab assumes that the m103.products collection is sharded on sku. 
+If you sharded on name instead, you must reimport the dataset and shard it on sku. 
+Here are the instructions to do this:
+
+see m103/Chapter3_Sharding/3_lab_DocumentsInChunks.txt file
+
+################################################################
+
+Lab Description
+
+In this lab, you will use the output of the explain() command to distinguish 
+between targeted queries (sent to specific shards) and scatter gather queries (sent to all shards).
+
+Here are a few definitions regarding the output of explain():
+
+SHARDING_FILTER: The step performed by mongos used to make sure that documents fetched 
+    from a particular shard are supposed to be from that shard. To do this, mongos compares 
+    the shard key of the document with the metadata on the config servers.
+
+IXSCAN: An index scan, used to scan through index keys.
+
+FETCH: A document fetch, used to retrieve an entire document because one or more of the fields is necessary.
+You can find more information about explain() in the official MongoDB documentation.
+https://docs.mongodb.com/manual/reference/explain-results/
+
+################################################################
+Now, given the explain() output of the following two queries:
+
+db.products.explain("executionStats").find({"sku": 23153496})
+{
+	"queryPlanner" : {
+		"mongosPlannerVersion" : 1,
+		"winningPlan" : {
+			"stage" : "SINGLE_SHARD",
+			"shards" : [
+				{
+					"shardName" : "m103-repl",
+					"connectionString" : "m103-repl/192.168.103.100:27001,192.168.103.100:27003,m103:27002",
+					"serverInfo" : {
+						"host" : "m103",
+						"port" : 27001,
+						"version" : "3.6.12",
+						"gitVersion" : "c2b9acad0248ca06b14ef1640734b5d0595b55f1"
+					},
+					"plannerVersion" : 1,
+					"namespace" : "m103.products",
+					"indexFilterSet" : false,
+					"parsedQuery" : {
+						"sku" : {
+							"$eq" : 23153496
+						}
+					},
+					"winningPlan" : {
+						"stage" : "FETCH",
+						"inputStage" : {
+							"stage" : "SHARDING_FILTER",
+							"inputStage" : {
+								"stage" : "IXSCAN",
+								"keyPattern" : {
+									"sku" : 1
+								},
+								"indexName" : "sku_1",
+								"isMultiKey" : false,
+								"multiKeyPaths" : {
+									"sku" : [ ]
+								},
+								"isUnique" : false,
+								"isSparse" : false,
+								"isPartial" : false,
+								"indexVersion" : 2,
+								"direction" : "forward",
+								"indexBounds" : {
+									"sku" : [
+										"[23153496.0, 23153496.0]"
+									]
+								}
+							}
+						}
+					},
+					"rejectedPlans" : [ ]
+				}
+			]
+		}
+	},
+	"executionStats" : {
+		"nReturned" : 1,
+		"executionTimeMillis" : 8,
+		"totalKeysExamined" : 1,
+		"totalDocsExamined" : 1,
+		"executionStages" : {
+			"stage" : "SINGLE_SHARD",
+			"nReturned" : 1,
+			"executionTimeMillis" : 8,
+			"totalKeysExamined" : 1,
+			"totalDocsExamined" : 1,
+			"totalChildMillis" : NumberLong(0),
+			"shards" : [
+				{
+					"shardName" : "m103-repl",
+					"executionSuccess" : true,
+					"executionStages" : {
+						"stage" : "FETCH",
+						"nReturned" : 1,
+						"executionTimeMillisEstimate" : 0,
+						"works" : 2,
+						"advanced" : 1,
+						"needTime" : 0,
+						"needYield" : 0,
+						"saveState" : 0,
+						"restoreState" : 0,
+						"isEOF" : 1,
+						"invalidates" : 0,
+						"docsExamined" : 1,
+						"alreadyHasObj" : 0,
+						"inputStage" : {
+							"stage" : "SHARDING_FILTER",
+							"nReturned" : 1,
+							"executionTimeMillisEstimate" : 0,
+							"works" : 2,
+							"advanced" : 1,
+							"needTime" : 0,
+							"needYield" : 0,
+							"saveState" : 0,
+							"restoreState" : 0,
+							"isEOF" : 1,
+							"invalidates" : 0,
+							"chunkSkips" : 0,
+							"inputStage" : {
+								"stage" : "IXSCAN",
+								"nReturned" : 1,
+								"executionTimeMillisEstimate" : 0,
+								"works" : 2,
+								"advanced" : 1,
+								"needTime" : 0,
+								"needYield" : 0,
+								"saveState" : 0,
+								"restoreState" : 0,
+								"isEOF" : 1,
+								"invalidates" : 0,
+								"keyPattern" : {
+									"sku" : 1
+								},
+								"indexName" : "sku_1",
+								"isMultiKey" : false,
+								"multiKeyPaths" : {
+									"sku" : [ ]
+								},
+								"isUnique" : false,
+								"isSparse" : false,
+								"isPartial" : false,
+								"indexVersion" : 2,
+								"direction" : "forward",
+								"indexBounds" : {
+									"sku" : [
+										"[23153496.0, 23153496.0]"
+									]
+								},
+								"keysExamined" : 1,
+								"seeks" : 1,
+								"dupsTested" : 0,
+								"dupsDropped" : 0,
+								"seenInvalidated" : 0
+							}
+						}
+					}
+				}
+			]
+		}
+	},
+	"ok" : 1,
+	"operationTime" : Timestamp(1556557132, 1),
+	"$clusterTime" : {
+		"clusterTime" : Timestamp(1556557139, 1),
+		"signature" : {
+			"hash" : BinData(0,"JEc1UWx7Aqu3YBFHgf5i/qLGTpg="),
+			"keyId" : NumberLong("6685145540008607770")
+		}
+	}
+}
+
+
+################################################################
+
+db.products.explain("executionStats").find({"shippingWeight": 1.00})
+{
+	"queryPlanner" : {
+		"mongosPlannerVersion" : 1,
+		"winningPlan" : {
+			"stage" : "SHARD_MERGE",
+			"shards" : [
+				{
+					"shardName" : "m103-repl-2",
+					"connectionString" : "m103-repl-2/192.168.103.100:27004,192.168.103.100:27005,192.168.103.100:27006",
+					"serverInfo" : {
+						"host" : "m103",
+						"port" : 27004,
+						"version" : "3.6.12",
+						"gitVersion" : "c2b9acad0248ca06b14ef1640734b5d0595b55f1"
+					},
+					"plannerVersion" : 1,
+					"namespace" : "m103.products",
+					"indexFilterSet" : false,
+					"parsedQuery" : {
+						"shippingWeight" : {
+							"$eq" : 1
+						}
+					},
+					"winningPlan" : {
+						"stage" : "SHARDING_FILTER",
+						"inputStage" : {
+							"stage" : "COLLSCAN",
+							"filter" : {
+								"shippingWeight" : {
+									"$eq" : 1
+								}
+							},
+							"direction" : "forward"
+						}
+					},
+					"rejectedPlans" : [ ]
+				},
+				{
+					"shardName" : "m103-repl",
+					"connectionString" : "m103-repl/192.168.103.100:27001,192.168.103.100:27003,m103:27002",
+					"serverInfo" : {
+						"host" : "m103",
+						"port" : 27001,
+						"version" : "3.6.12",
+						"gitVersion" : "c2b9acad0248ca06b14ef1640734b5d0595b55f1"
+					},
+					"plannerVersion" : 1,
+					"namespace" : "m103.products",
+					"indexFilterSet" : false,
+					"parsedQuery" : {
+						"shippingWeight" : {
+							"$eq" : 1
+						}
+					},
+					"winningPlan" : {
+						"stage" : "SHARDING_FILTER",
+						"inputStage" : {
+							"stage" : "COLLSCAN",
+							"filter" : {
+								"shippingWeight" : {
+									"$eq" : 1
+								}
+							},
+							"direction" : "forward"
+						}
+					},
+					"rejectedPlans" : [ ]
+				}
+			]
+		}
+	},
+	"executionStats" : {
+		"nReturned" : 0,
+		"executionTimeMillis" : 177,
+		"totalKeysExamined" : 0,
+		"totalDocsExamined" : 516784,
+		"executionStages" : {
+			"stage" : "SHARD_MERGE",
+			"nReturned" : 0,
+			"executionTimeMillis" : 177,
+			"totalKeysExamined" : 0,
+			"totalDocsExamined" : 516784,
+			"totalChildMillis" : NumberLong(289),
+			"shards" : [
+				{
+					"shardName" : "m103-repl-2",
+					"executionSuccess" : true,
+					"executionStages" : {
+						"stage" : "SHARDING_FILTER",
+						"nReturned" : 0,
+						"executionTimeMillisEstimate" : 70,
+						"works" : 217887,
+						"advanced" : 0,
+						"needTime" : 217886,
+						"needYield" : 0,
+						"saveState" : 1702,
+						"restoreState" : 1702,
+						"isEOF" : 1,
+						"invalidates" : 0,
+						"chunkSkips" : 0,
+						"inputStage" : {
+							"stage" : "COLLSCAN",
+							"filter" : {
+								"shippingWeight" : {
+									"$eq" : 1
+								}
+							},
+							"nReturned" : 0,
+							"executionTimeMillisEstimate" : 70,
+							"works" : 217887,
+							"advanced" : 0,
+							"needTime" : 217886,
+							"needYield" : 0,
+							"saveState" : 1702,
+							"restoreState" : 1702,
+							"isEOF" : 1,
+							"invalidates" : 0,
+							"direction" : "forward",
+							"docsExamined" : 217885
+						}
+					}
+				},
+				{
+					"shardName" : "m103-repl",
+					"executionSuccess" : true,
+					"executionStages" : {
+						"stage" : "SHARDING_FILTER",
+						"nReturned" : 0,
+						"executionTimeMillisEstimate" : 30,
+						"works" : 298901,
+						"advanced" : 0,
+						"needTime" : 298900,
+						"needYield" : 0,
+						"saveState" : 2335,
+						"restoreState" : 2335,
+						"isEOF" : 1,
+						"invalidates" : 0,
+						"chunkSkips" : 0,
+						"inputStage" : {
+							"stage" : "COLLSCAN",
+							"filter" : {
+								"shippingWeight" : {
+									"$eq" : 1
+								}
+							},
+							"nReturned" : 0,
+							"executionTimeMillisEstimate" : 30,
+							"works" : 298901,
+							"advanced" : 0,
+							"needTime" : 298900,
+							"needYield" : 0,
+							"saveState" : 2335,
+							"restoreState" : 2335,
+							"isEOF" : 1,
+							"invalidates" : 0,
+							"direction" : "forward",
+							"docsExamined" : 298899
+						}
+					}
+				}
+			]
+		}
+	},
+	"ok" : 1,
+	"operationTime" : Timestamp(1556557162, 1),
+	"$clusterTime" : {
+		"clusterTime" : Timestamp(1556557163, 1),
+		"signature" : {
+			"hash" : BinData(0,"hJXVWS27cSkx3y4VTUy55V3nWzI="),
+			"keyId" : NumberLong("6685145540008607770")
+		}
+	}
+}
+
+################################################################
+
+
+Query 2 dont use the shard key, that is sku
+Query 2 performs a collection scan 
+
+db.products.explain("executionStats").find({"shippingWeight": 1.00})
+{
+	"queryPlanner" : {
+		"mongosPlannerVersion" : 1,
+		"winningPlan" : {
+			"stage" : "SHARD_MERGE",
+			"shards" : [
+				{
+					"shardName" : "m103-repl-2",
+					"connectionString" : "m103-repl-2/192.168.103.100:27004,192.168.103.100:27005,192.168.103.100:27006",
+...
+					"winningPlan" : {
+						"stage" : "SHARDING_FILTER",
+						"inputStage" : {
+							"stage" : "COLLSCAN",
+
+
+################################################################
+
+Query 1 performs an index scan before the sharding filter
+
+db.products.explain("executionStats").find({"sku": 23153496})
+{
+	"queryPlanner" : {
+		"mongosPlannerVersion" : 1,
+		"winningPlan" : {
+			"stage" : "SINGLE_SHARD",
+			"shards" : [
+				{
+					"shardName" : "m103-repl",
+...
+					"winningPlan" : {
+						"stage" : "FETCH",
+						"inputStage" : {
+							"stage" : "SHARDING_FILTER",        # sharding filter after
+							"inputStage" : {
+								"stage" : "IXSCAN",             # index scan first 
+...
